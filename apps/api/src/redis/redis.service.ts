@@ -55,11 +55,15 @@ export class RedisService implements OnModuleDestroy {
 
   async onModuleDestroy() {
     if (this._client) {
+      // Tear down the connection. quit() only works if connected, so
+      // disconnect() is the safe fallback. Both kill internal timers.
       try {
-        await this._client.quit();
+        if (this._available) await this._client.quit();
+        else this._client.disconnect(false);
       } catch {
-        this._client.disconnect();
+        this._client.disconnect(false);
       }
+      this._client = null;
     }
   }
 }

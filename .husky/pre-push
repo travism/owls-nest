@@ -1,0 +1,5 @@
+# pre-push: full suite including E2E.
+# Requires Postgres on the host with the owlsnest_test database.
+# Skip with `git push --no-verify` only when intentional.
+
+pnpm test:all

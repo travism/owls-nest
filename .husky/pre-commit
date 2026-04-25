@@ -1,0 +1,7 @@
+# pre-commit: fast checks only.
+# - Typecheck across the workspace.
+# - Run unit tests (shared + admin + api unit suites). ~30s.
+# E2E tests run on push (see .husky/pre-push) since they need Postgres
+# and take longer.
+
+pnpm typecheck && pnpm test

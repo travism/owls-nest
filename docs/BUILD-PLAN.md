@@ -50,6 +50,8 @@ Last updated: 2026-04-25
 
 All M1 acceptance criteria pass. Postgres `owlsnest` role + database created on host; migration applied; seed verified.
 
+**Tests:** `apps/api/test/health.e2e-spec.ts` covers the `/health` endpoint.
+
 ---
 
 ### M2 — Admin auth (login + TOTP)
@@ -76,6 +78,11 @@ Verified 2026-04-25.
 **Carryovers:**
 - Real Redis on host (currently using MemoryStore — fine for dev, must use Compose Redis for prod). Revisit when infrastructure lands.
 - CSRF error envelope unification (csrf-csrf throws ForbiddenError caught by Nest's default filter as `{statusCode, message}`; SPA + e2e script handle this via lenient retry logic). A global exception filter mapping these to the standard `{error: {code, message}}` envelope is a small follow-up.
+
+**Tests:**
+- Unit: `apps/api/src/auth/password.service.spec.ts`, `totp.service.spec.ts`, `lockout.service.spec.ts` (18 tests).
+- E2E: `apps/api/test/auth.e2e-spec.ts` covers full setup → login → TOTP → whoami → logout cycle, /setup conflict, wrong password, invalid TOTP, lockout, recovery code single-use, audit log writes, CSRF rejection (8 tests).
+- Frontend: `apps/admin/src/pages/Login.test.tsx` (component sanity, 2 tests).
 
 ---
 
@@ -228,3 +235,31 @@ Scope per PRD §14:
 - **New milestones discovered mid-phase:** insert with the next available number; renumber subsequent milestones if helpful.
 
 This file is the answer to "where are we?" — keep it accurate.
+
+---
+
+## Testing discipline
+
+**Every milestone ships with tests.** Acceptance criteria for any new feature must include the relevant tests passing in CI before the milestone is marked ✅.
+
+**Test runners:**
+- `apps/api` — Jest. Unit tests co-located as `*.spec.ts`; E2E tests under `test/*.e2e-spec.ts` (boots full Nest app + Postgres test DB).
+- `packages/shared` — Vitest (Zod schema tests).
+- `apps/admin` — Vitest + Testing Library (component / hook tests).
+
+**Commands:**
+- `pnpm test` — fast unit suites across all packages (~30s).
+- `pnpm test:e2e` — API integration tests (~50s, requires Postgres on host).
+- `pnpm test:all` — full suite.
+
+**Test database:** `owlsnest_test` Postgres database (separate from dev `owlsnest`). Migrations applied on creation; `truncateAll` helper wipes all rows between tests so each spec runs on a clean slate.
+
+**Git hooks (husky):**
+- `pre-commit` — `pnpm typecheck && pnpm test` (unit tests only, fast).
+- `pre-push` — `pnpm test:all` (full suite incl. E2E). Skip with `--no-verify` only when intentional.
+
+**For each new feature:**
+- Pure logic → unit test in the same package.
+- Service touching DB / external → e2e test that hits the real endpoint via supertest.
+- React component → component test rendering with required providers.
+- New Zod schema → exhaustive valid + invalid cases in `*.test.ts`.

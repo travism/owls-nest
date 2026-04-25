@@ -14,13 +14,17 @@
     "dev:build-worker": "pnpm --filter @owlsnest/build-worker run dev",
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test",
+    "test": "pnpm -r --filter='@owlsnest/shared' --filter='@owlsnest/admin' --filter='@owlsnest/api' run test",
+    "test:e2e": "pnpm --filter @owlsnest/api run test:e2e",
+    "test:all": "pnpm run test && pnpm run test:e2e",
     "prisma:generate": "pnpm --filter @owlsnest/prisma run generate",
     "prisma:migrate": "pnpm --filter @owlsnest/prisma run migrate:dev",
-    "prisma:seed": "pnpm --filter @owlsnest/prisma run seed"
+    "prisma:seed": "pnpm --filter @owlsnest/prisma run seed",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "typescript": "^5.5.4",
-    "@types/node": "^20.14.0"
+    "@types/node": "^20.14.0",
+    "husky": "^9.1.7",
+    "typescript": "^5.5.4"
   }
 }

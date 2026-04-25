@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M5 complete — ready for M6
-> **Next up:** M6 — Inquiry submission
+> **Now:** ✅ M6 complete — ready for M7
+> **Next up:** M7 — Request-to-book + Stripe Checkout
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-25 (after M5; 243 tests passing)
+Last updated: 2026-04-25 (after M6; 281 tests passing)
 
 ---
 
@@ -193,19 +193,25 @@ Verified 2026-04-25.
 ---
 
 ### M6 — Inquiry submission
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-- [ ] `InquiryModule` POST endpoint with Zod validation
-- [ ] Astro Book page → React inquiry form → API
-- [ ] Admin "Inquiries" view: list, detail, mark responded, convert to booking request
-- [ ] Email + SMS admin notification on new inquiry (per D-018)
-- [ ] **Unit tests** — `InquiryService` (create + status transitions + convert-to-booking); inquiry → outbox notification dispatch logic
-- [ ] **E2E tests** — `POST /api/v1/inquiries` (happy path + validation errors + invalid date range); admin `GET /inquiries` + status transitions; outbox row created with the right notification job
-- [ ] **Component tests** — public inquiry form (validation surfacing, submit, success state); admin inquiry list + detail
-- [ ] **Schema tests** — already covered for `InquiryCreateSchema` in `packages/shared`; add cases for any new fields
-- [ ] `pnpm test:all` green
+- [x] `InquiryModule` POST endpoint with Zod validation (public, no auth/CSRF)
+- [x] Astro Book page → `InquiryForm` React island → API (client + server share `InquiryCreateSchema` so validation messages match)
+- [x] Admin "Inquiries" view: list, filter by status, expandable detail row, mark responded / close / convert
+- [x] Outbox row written in the same Prisma transaction as the inquiry — drained later by the `outbox-drain` worker (M2.x) to fan out admin email + SMS per D-018
+- [x] Audit log entries for `inquiry.transition` and `inquiry.convert`
+- [x] **Unit tests** — `InquiryService` (13 tests covering create + outbox write + every status transition + every illegal transition + convert + double-convert)
+- [x] **E2E tests** — `apps/api/test/inquiry.e2e-spec.ts` (13 tests: public submit without CSRF, validation errors, full admin lifecycle, illegal transitions, double-convert CONFLICT, 404/400 on unknown id)
+- [x] **Component tests** — `InquiryForm` (5 tests: structure, client-side date validation, email validation, successful submission, API error display); `InquiriesPage` (3 tests: list rendering, action visibility, filter chips)
+- [x] CSRF middleware refactored: public endpoints (currently `POST /api/v1/inquiries`) explicitly excluded since they don't carry session credentials. Forward-looking allowlist for M7's `POST /api/v1/bookings`.
+- [x] `pnpm test:all` green (281 tests total)
 
-**Acceptance:** Submit inquiry → `Inquiry` row created → admin gets email + SMS → visible in admin SPA; full test suite green.
+**Acceptance:** smoke-tested: public POST with no cookies/CSRF → 201 → Inquiry row in DB + Outbox row keyed `inquiry.new:{id}`. Verified 2026-04-25.
+
+**Notes:**
+- Audit action enum extended with `inquiry.transition` and `inquiry.convert`.
+- CSRF rule moved from "all non-GET /api/v1" to "all non-GET /api/v1 except a public allowlist." Test app mirrors the rule. CORS + Origin checking guards public POSTs.
+- Conversion to a real `Booking` row lands in M7 — for now `convert` flips status to `converted` so the inquiry leaves the active queue.
 
 ---
 

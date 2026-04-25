@@ -85,10 +85,13 @@ export async function createTestApp(): Promise<TestApp> {
     }
     next();
   });
+  // Mirror the production CSRF rule from main.ts so tests catch regressions.
+  const PUBLIC_NON_GET_PATHS: RegExp[] = [/^\/api\/v1\/inquiries$/];
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const isProtected = req.path.startsWith('/api/v1/auth/admin');
+    const protectedPath = req.path.startsWith('/api/v1');
     const safe = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
-    if (!isProtected || safe) return next();
+    const isPublic = PUBLIC_NON_GET_PATHS.some((re) => re.test(req.path));
+    if (!protectedPath || safe || isPublic) return next();
     csrf.doubleCsrfProtection(req, res, next);
   });
 

@@ -1,6 +1,9 @@
 // The Owl's Nest — Prisma schema
 // Mirrors ARCHITECTURE.md §4.2 entity list and field shapes from PRD §12,
 // loging-tax-plan.md §5.1, and calendar-sync-plan.md §4.2.
+//
+// Convention: TypeScript field names are camelCase; database columns are
+// snake_case via @map. Table names are snake_case via @@map.
 
 generator client {
   provider      = "prisma-client-js"
@@ -17,29 +20,29 @@ datasource db {
 // =====================================================================
 
 model Property {
-  id              String   @id @default(uuid()) @db.Uuid
-  name            String
-  addressLine1    String
-  city            String
-  state           String   @db.VarChar(2)
-  postalCode      String
-  checkInTime     String   @db.VarChar(8)  // "15:00:00"
-  checkOutTime    String   @db.VarChar(8)
-  maxGuests       Int      @default(4)
-  baseNightlyRate Decimal  @db.Decimal(10, 2)
-  cleaningFee     Decimal  @db.Decimal(10, 2)
-  minStay         Int      @default(2)
-  cancellationPolicy Json  // tier thresholds + refund percentages
+  id                  String   @id @default(uuid()) @db.Uuid
+  name                String
+  addressLine1        String   @map("address_line_1")
+  city                String
+  state               String   @db.VarChar(2)
+  postalCode          String   @map("postal_code")
+  checkInTime         String   @db.VarChar(8) @map("check_in_time")
+  checkOutTime        String   @db.VarChar(8) @map("check_out_time")
+  maxGuests           Int      @default(4) @map("max_guests")
+  baseNightlyRate     Decimal  @db.Decimal(10, 2) @map("base_nightly_rate")
+  cleaningFee         Decimal  @db.Decimal(10, 2) @map("cleaning_fee")
+  minStay             Int      @default(2) @map("min_stay")
+  cancellationPolicy  Json     @map("cancellation_policy")
 
-  taxJurisdictions   TaxJurisdiction[]
-  bookings           Booking[]
-  blockedDates       BlockedDate[]
-  pricingOverrides   PricingOverride[]
+  taxJurisdictions    TaxJurisdiction[]
+  bookings            Booking[]
+  blockedDates        BlockedDate[]
+  pricingOverrides    PricingOverride[]
   pricingCacheEntries PricingCacheEntry[]
-  calendarSyncs      CalendarSync[]
+  calendarSyncs       CalendarSync[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("property")
 }
@@ -50,22 +53,22 @@ model Property {
 
 model TaxJurisdiction {
   id                    String    @id @default(uuid()) @db.Uuid
-  propertyId            String    @db.Uuid
+  propertyId            String    @db.Uuid @map("property_id")
   property              Property  @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  jurisdictionName      String    // "Oregon State TLT", "City of Redmond TLT"
-  jurisdictionLevel     String    // 'state', 'city', 'county'
-  taxRate               Decimal   @db.Decimal(5, 4) // 0.0150 = 1.5%
-  adminFeeRate          Decimal?  @db.Decimal(5, 4) // 0.05 for state retention
-  filingFrequency       String    // 'monthly', 'quarterly'
-  filingAuthority       String?
-  filingPortalUrl       String?
-  exemptThresholdNights Int       @default(30)
-  effectiveFrom         DateTime  @default(now()) @db.Date
-  effectiveTo           DateTime? @db.Date
-  verifiedAt            DateTime  @default(now())
+  jurisdictionName      String    @map("jurisdiction_name")
+  jurisdictionLevel     String    @map("jurisdiction_level")
+  taxRate               Decimal   @db.Decimal(5, 4) @map("tax_rate")
+  adminFeeRate          Decimal?  @db.Decimal(5, 4) @map("admin_fee_rate")
+  filingFrequency       String    @map("filing_frequency")
+  filingAuthority       String?   @map("filing_authority")
+  filingPortalUrl       String?   @map("filing_portal_url")
+  exemptThresholdNights Int       @default(30) @map("exempt_threshold_nights")
+  effectiveFrom         DateTime  @default(now()) @db.Date @map("effective_from")
+  effectiveTo           DateTime? @db.Date @map("effective_to")
+  verifiedAt            DateTime  @default(now()) @map("verified_at")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([propertyId, effectiveTo])
   @@map("tax_jurisdiction")
@@ -76,20 +79,20 @@ model TaxJurisdiction {
 // =====================================================================
 
 model AdminUser {
-  id                  String   @id @default(uuid()) @db.Uuid
-  email               String   @unique
-  passwordHash        String
-  totpSecretEncrypted String?
-  totpEnrolledAt      DateTime?
-  recoveryCodesHashed String[] @default([])
-  failedAttempts      Int      @default(0)
-  lockedUntil         DateTime?
-  lastLoginAt         DateTime?
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  totpSecretEncrypted String?   @map("totp_secret_encrypted")
+  totpEnrolledAt      DateTime? @map("totp_enrolled_at")
+  recoveryCodesHashed String[]  @default([]) @map("recovery_codes_hashed")
+  failedAttempts      Int       @default(0) @map("failed_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  lastLoginAt         DateTime? @map("last_login_at")
 
   auditLogEntries AuditLogEntry[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("admin_user")
 }
@@ -108,23 +111,23 @@ model Guest {
   magicLinks MagicLinkToken[]
   messages   Message[]
 
-  lastLoginAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("guest")
 }
 
 model MagicLinkToken {
   id          String    @id @default(uuid()) @db.Uuid
-  guestId     String    @db.Uuid
+  guestId     String    @db.Uuid @map("guest_id")
   guest       Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
-  tokenHash   String    @unique // SHA-256 of the URL token
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  ipRequested String?
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  ipRequested String?   @map("ip_requested")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([guestId])
   @@index([expiresAt])
@@ -136,18 +139,18 @@ model MagicLinkToken {
 // =====================================================================
 
 model Inquiry {
-  id                  String    @id @default(uuid()) @db.Uuid
-  name                String
-  email               String
-  phone               String?
-  checkIn             DateTime  @db.Date
-  checkOut            DateTime  @db.Date
-  message             String?
-  status              String    @default("new") // new | responded | converted | closed
-  convertedBookingId  String?   @db.Uuid
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String
+  email              String
+  phone              String?
+  checkIn            DateTime @db.Date @map("check_in")
+  checkOut           DateTime @db.Date @map("check_out")
+  message            String?
+  status             String   @default("new")
+  convertedBookingId String?  @db.Uuid @map("converted_booking_id")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
   @@map("inquiry")
@@ -159,50 +162,50 @@ model Inquiry {
 
 model Booking {
   id          String    @id @default(uuid()) @db.Uuid
-  propertyId  String    @db.Uuid
+  propertyId  String    @db.Uuid @map("property_id")
   property    Property  @relation(fields: [propertyId], references: [id], onDelete: Restrict)
-  guestId     String?   @db.Uuid
+  guestId     String?   @db.Uuid @map("guest_id")
   guest       Guest?    @relation(fields: [guestId], references: [id], onDelete: SetNull)
 
-  checkIn     DateTime  @db.Date
-  checkOut    DateTime  @db.Date
-  numGuests   Int
+  checkIn   DateTime @db.Date @map("check_in")
+  checkOut  DateTime @db.Date @map("check_out")
+  numGuests Int      @map("num_guests")
 
-  status      String    // inquiry | pending_approval | approved | confirmed | cancelled | completed
-  source      String    @default("direct") // direct | airbnb | vrbo | booking_com | google
+  status String
+  source String @default("direct")
 
   // Pricing
-  nightlyRate         Decimal  @db.Decimal(10, 2)
-  numNights           Int
-  subtotal            Decimal  @db.Decimal(10, 2)
-  cleaningFeeInternal Decimal  @db.Decimal(10, 2) @default(0)
+  nightlyRate         Decimal @db.Decimal(10, 2) @map("nightly_rate")
+  numNights           Int     @map("num_nights")
+  subtotal            Decimal @db.Decimal(10, 2)
+  cleaningFeeInternal Decimal @db.Decimal(10, 2) @default(0) @map("cleaning_fee_internal")
 
   // Tax (per loging-tax-plan.md §5.1)
-  stateTltAmount         Decimal @db.Decimal(10, 2) @default(0)
-  cityTltAmount          Decimal @db.Decimal(10, 2) @default(0)
-  totalTaxAmount         Decimal @db.Decimal(10, 2) @default(0)
-  stateAdminFeeRetained  Decimal @db.Decimal(10, 2) @default(0)
-  taxExempt              Boolean @default(false)
-  taxExemptReason        String?
-  otaRemittedState       Boolean @default(false)
-  otaRemittedCity        Boolean @default(false)
+  stateTltAmount        Decimal @db.Decimal(10, 2) @default(0) @map("state_tlt_amount")
+  cityTltAmount         Decimal @db.Decimal(10, 2) @default(0) @map("city_tlt_amount")
+  totalTaxAmount        Decimal @db.Decimal(10, 2) @default(0) @map("total_tax_amount")
+  stateAdminFeeRetained Decimal @db.Decimal(10, 2) @default(0) @map("state_admin_fee_retained")
+  taxExempt             Boolean @default(false) @map("tax_exempt")
+  taxExemptReason       String? @map("tax_exempt_reason")
+  otaRemittedState      Boolean @default(false) @map("ota_remitted_state")
+  otaRemittedCity       Boolean @default(false) @map("ota_remitted_city")
 
   // Payment
-  stripePaymentIntentId String?
-  stripeCustomerId      String?
-  stripeFee             Decimal @db.Decimal(10, 2) @default(0)
-  netRevenue            Decimal @db.Decimal(10, 2) @default(0)
+  stripePaymentIntentId String? @map("stripe_payment_intent_id")
+  stripeCustomerId      String? @map("stripe_customer_id")
+  stripeFee             Decimal @db.Decimal(10, 2) @default(0) @map("stripe_fee")
+  netRevenue            Decimal @db.Decimal(10, 2) @default(0) @map("net_revenue")
 
   // Cancellation
-  cancellationTierApplied String?
-  refundAmount            Decimal? @db.Decimal(10, 2)
-  cancelledAt             DateTime?
+  cancellationTierApplied String?   @map("cancellation_tier_applied")
+  refundAmount            Decimal?  @db.Decimal(10, 2) @map("refund_amount")
+  cancelledAt             DateTime? @map("cancelled_at")
 
-  messages             Message[]
-  turnoverAssignments  TurnoverAssignment[]
+  messages            Message[]
+  turnoverAssignments TurnoverAssignment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, checkIn])
   @@index([source])
@@ -215,18 +218,18 @@ model Booking {
 // =====================================================================
 
 model Cleaner {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
   name         String
   phone        String
-  priorityRank Int
-  active       Boolean  @default(true)
+  priorityRank Int     @map("priority_rank")
+  active       Boolean @default(true)
 
-  portalTokens         CleanerToken[]
-  requestTokens        CleanerRequestToken[]
-  turnoverAssignments  TurnoverAssignment[]
+  portalTokens        CleanerToken[]
+  requestTokens       CleanerRequestToken[]
+  turnoverAssignments TurnoverAssignment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([priorityRank])
   @@index([active, priorityRank])
@@ -235,28 +238,28 @@ model Cleaner {
 
 model CleanerToken {
   id        String    @id @default(uuid()) @db.Uuid
-  cleanerId String    @db.Uuid
+  cleanerId String    @db.Uuid @map("cleaner_id")
   cleaner   Cleaner   @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique // SHA-256 of the portal URL token
-  revokedAt DateTime?
+  tokenHash String    @unique @map("token_hash")
+  revokedAt DateTime? @map("revoked_at")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([cleanerId])
   @@map("cleaner_token")
 }
 
 model CleanerRequestToken {
-  id           String    @id @default(uuid()) @db.Uuid
-  cleanerId    String    @db.Uuid
-  cleaner      Cleaner   @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
-  assignmentId String    @db.Uuid
+  id           String             @id @default(uuid()) @db.Uuid
+  cleanerId    String             @db.Uuid @map("cleaner_id")
+  cleaner      Cleaner            @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  assignmentId String             @db.Uuid @map("assignment_id")
   assignment   TurnoverAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  action       String    // 'accept' | 'decline'
-  expiresAt    DateTime
-  consumedAt   DateTime?
+  action       String
+  expiresAt    DateTime           @map("expires_at")
+  consumedAt   DateTime?          @map("consumed_at")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([cleanerId])
   @@index([assignmentId])
@@ -265,24 +268,24 @@ model CleanerRequestToken {
 }
 
 model TurnoverAssignment {
-  id                  String   @id @default(uuid()) @db.Uuid
-  bookingId           String   @db.Uuid
-  booking             Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  cleanerId           String?  @db.Uuid
-  cleaner             Cleaner? @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+  id                  String    @id @default(uuid()) @db.Uuid
+  bookingId           String    @db.Uuid @map("booking_id")
+  booking             Booking   @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  cleanerId           String?   @db.Uuid @map("cleaner_id")
+  cleaner             Cleaner?  @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
 
-  date                DateTime @db.Date
-  checkOutTime        String   @db.VarChar(8)
-  checkInTime         String   @db.VarChar(8)
-  status              String   @default("unassigned") // unassigned | requested | assigned | completed
-  specialInstructions String?
-  requestHistory      Json     @default("[]") // [{cleaner_id, sent_at, responded_at, response}]
-  completedAt         DateTime?
+  date                DateTime  @db.Date
+  checkOutTime        String    @db.VarChar(8) @map("check_out_time")
+  checkInTime         String    @db.VarChar(8) @map("check_in_time")
+  status              String    @default("unassigned")
+  specialInstructions String?   @map("special_instructions")
+  requestHistory      Json      @default("[]") @map("request_history")
+  completedAt         DateTime? @map("completed_at")
 
   requestTokens CleanerRequestToken[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([date])
   @@index([status])
@@ -294,22 +297,22 @@ model TurnoverAssignment {
 // =====================================================================
 
 model Message {
-  id           String   @id @default(uuid()) @db.Uuid
-  guestId      String?  @db.Uuid
-  guest        Guest?   @relation(fields: [guestId], references: [id], onDelete: SetNull)
-  bookingId    String?  @db.Uuid
-  booking      Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  id        String   @id @default(uuid()) @db.Uuid
+  guestId   String?  @db.Uuid @map("guest_id")
+  guest     Guest?   @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  bookingId String?  @db.Uuid @map("booking_id")
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
 
-  direction    String   // 'inbound' | 'outbound'
-  body         String
-  templateId   String?  @db.Uuid
-  template     MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  direction  String
+  body       String
+  templateId String?          @db.Uuid @map("template_id")
+  template   MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
-  twilioSid    String?  @unique
-  sentAt       DateTime?
-  deliveredAt  DateTime?
+  twilioSid   String?   @unique @map("twilio_sid")
+  sentAt      DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([guestId, createdAt])
   @@index([bookingId])
@@ -317,17 +320,17 @@ model Message {
 }
 
 model MessageTemplate {
-  id         String   @id @default(uuid()) @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
   name       String
-  type       String   // 'confirmation' | 'pre_arrival' | 'post_stay' | 'admin_notification' | 'custom'
+  type       String
   body       String
-  isDefault  Boolean  @default(false)
-  archivedAt DateTime?
+  isDefault  Boolean   @default(false) @map("is_default")
+  archivedAt DateTime? @map("archived_at")
 
   messages Message[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("message_template")
 }
@@ -340,16 +343,16 @@ model BlogPost {
   id                String    @id @default(uuid()) @db.Uuid
   title             String
   slug              String    @unique
-  body              String    // markdown
+  body              String
   excerpt           String?
-  featuredImagePath String?   // path under /var/owlsnest/media/blog/
-  status            String    @default("draft") // draft | published
-  publishedAt       DateTime?
-  seoTitle          String?
-  seoDescription    String?
+  featuredImagePath String?   @map("featured_image_path")
+  status            String    @default("draft")
+  publishedAt       DateTime? @map("published_at")
+  seoTitle          String?   @map("seo_title")
+  seoDescription    String?   @map("seo_description")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, publishedAt])
   @@map("blog_post")
@@ -360,17 +363,17 @@ model BlogPost {
 // =====================================================================
 
 model Review {
-  id          String   @id @default(uuid()) @db.Uuid
-  guestName   String
-  platform    String   // 'direct' | 'airbnb' | 'vrbo' | 'booking_com'
-  rating      Int      // 1-5
-  body        String
-  bookingId   String?  @db.Uuid
-  visible     Boolean  @default(false)
-  reviewDate  DateTime @db.Date
+  id         String   @id @default(uuid()) @db.Uuid
+  guestName  String   @map("guest_name")
+  platform   String
+  rating     Int
+  body       String
+  bookingId  String?  @db.Uuid @map("booking_id")
+  visible    Boolean  @default(false)
+  reviewDate DateTime @db.Date @map("review_date")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([visible, reviewDate])
   @@map("review")
@@ -382,41 +385,41 @@ model Review {
 
 model CalendarSync {
   id                  String    @id @default(uuid()) @db.Uuid
-  propertyId          String    @db.Uuid
+  propertyId          String    @db.Uuid @map("property_id")
   property            Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  platform            String    // 'airbnb' | 'vrbo' | 'booking_com'
-  icalImportUrl       String
-  lastSyncedAt        DateTime?
-  lastSyncStatus      String    @default("pending") // 'success' | 'failed' | 'pending' | 'warning'
-  lastSyncError       String?
-  lastSyncEventCount  Int       @default(0)
-  syncIntervalMinutes Int       @default(30)
+  platform            String
+  icalImportUrl       String    @map("ical_import_url")
+  lastSyncedAt        DateTime? @map("last_synced_at")
+  lastSyncStatus      String    @default("pending") @map("last_sync_status")
+  lastSyncError       String?   @map("last_sync_error")
+  lastSyncEventCount  Int       @default(0) @map("last_sync_event_count")
+  syncIntervalMinutes Int       @default(30) @map("sync_interval_minutes")
   active              Boolean   @default(true)
 
   blockedDates BlockedDate[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([active])
   @@map("calendar_sync")
 }
 
 model BlockedDate {
-  id              String        @id @default(uuid()) @db.Uuid
-  propertyId      String        @db.Uuid
-  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  startDate       DateTime      @db.Date
-  endDate         DateTime      @db.Date // exclusive
-  reason          String        // 'manual_block' | 'maintenance' | 'ota_booking'
-  sourcePlatform  String?
-  sourceEventUid  String?
-  sourceSummary   String?
-  calendarSyncId  String?       @db.Uuid
-  calendarSync    CalendarSync? @relation(fields: [calendarSyncId], references: [id], onDelete: SetNull)
+  id             String        @id @default(uuid()) @db.Uuid
+  propertyId     String        @db.Uuid @map("property_id")
+  property       Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  startDate      DateTime      @db.Date @map("start_date")
+  endDate        DateTime      @db.Date @map("end_date")
+  reason         String
+  sourcePlatform String?       @map("source_platform")
+  sourceEventUid String?       @map("source_event_uid")
+  sourceSummary  String?       @map("source_summary")
+  calendarSyncId String?       @db.Uuid @map("calendar_sync_id")
+  calendarSync   CalendarSync? @relation(fields: [calendarSyncId], references: [id], onDelete: SetNull)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([sourceEventUid, calendarSyncId])
   @@index([startDate, endDate])
@@ -429,14 +432,14 @@ model BlockedDate {
 
 model PricingOverride {
   id              String   @id @default(uuid()) @db.Uuid
-  propertyId      String   @db.Uuid
+  propertyId      String   @db.Uuid @map("property_id")
   property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   date            DateTime @db.Date
-  nightlyRate     Decimal  @db.Decimal(10, 2)
-  minStayOverride Int?
+  nightlyRate     Decimal  @db.Decimal(10, 2) @map("nightly_rate")
+  minStayOverride Int?     @map("min_stay_override")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([propertyId, date])
   @@map("pricing_override")
@@ -444,13 +447,13 @@ model PricingOverride {
 
 model PricingCacheEntry {
   id          String   @id @default(uuid()) @db.Uuid
-  propertyId  String   @db.Uuid
+  propertyId  String   @db.Uuid @map("property_id")
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   date        DateTime @db.Date
-  nightlyRate Decimal  @db.Decimal(10, 2)
-  minStay     Int      @default(1)
-  source      String   @default("pricelabs") // 'pricelabs' | 'manual' | 'fallback'
-  fetchedAt   DateTime @default(now())
+  nightlyRate Decimal  @db.Decimal(10, 2) @map("nightly_rate")
+  minStay     Int      @default(1) @map("min_stay")
+  source      String   @default("pricelabs")
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
 
   @@unique([propertyId, date])
   @@index([fetchedAt])
@@ -464,16 +467,16 @@ model PricingCacheEntry {
 model PromoCode {
   id            String    @id @default(uuid()) @db.Uuid
   code          String    @unique
-  discountType  String    // 'percentage' | 'fixed'
-  discountValue Decimal   @db.Decimal(10, 2)
-  validFrom     DateTime  @db.Date
-  validTo       DateTime? @db.Date
-  maxUses       Int?
-  currentUses   Int       @default(0)
+  discountType  String    @map("discount_type")
+  discountValue Decimal   @db.Decimal(10, 2) @map("discount_value")
+  validFrom     DateTime  @db.Date @map("valid_from")
+  validTo       DateTime? @db.Date @map("valid_to")
+  maxUses       Int?      @map("max_uses")
+  currentUses   Int       @default(0) @map("current_uses")
   active        Boolean   @default(false)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("promo_code")
 }
@@ -483,18 +486,18 @@ model PromoCode {
 // =====================================================================
 
 model AuditLogEntry {
-  id           String     @id @default(uuid()) @db.Uuid
-  adminUserId  String?    @db.Uuid
-  adminUser    AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
-  action       String     // 'booking.approve', 'booking.refund', 'auth.login.success', etc.
-  targetType   String?    // 'booking', 'guest', 'cleaner', 'admin_user'
-  targetId     String?
-  before       Json?
-  after        Json?
-  ipAddress    String?
-  userAgent    String?
+  id          String     @id @default(uuid()) @db.Uuid
+  adminUserId String?    @db.Uuid @map("admin_user_id")
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  action      String
+  targetType  String?    @map("target_type")
+  targetId    String?    @map("target_id")
+  before      Json?
+  after       Json?
+  ipAddress   String?    @map("ip_address")
+  userAgent   String?    @map("user_agent")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([adminUserId, createdAt])
   @@index([action, createdAt])
@@ -507,13 +510,13 @@ model AuditLogEntry {
 // =====================================================================
 
 model WebhookEvent {
-  id          String   @id // provider-supplied event id (Stripe event.id, Twilio MessageSid)
-  provider    String   // 'stripe' | 'twilio' | 'mailersend'
-  eventType   String?
+  id          String    @id
+  provider    String
+  eventType   String?   @map("event_type")
   payload     Json?
-  processedAt DateTime?
+  processedAt DateTime? @map("processed_at")
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([provider, createdAt])
   @@map("webhook_event")
@@ -524,16 +527,16 @@ model WebhookEvent {
 // =====================================================================
 
 model Outbox {
-  id          String    @id @default(uuid()) @db.Uuid
-  jobName     String    // BullMQ queue name
-  payload     Json
-  idempotencyKey String? @unique
-  enqueuedAt  DateTime?
-  failedAt    DateTime?
-  failureReason String?
-  attempts    Int       @default(0)
+  id             String    @id @default(uuid()) @db.Uuid
+  jobName        String    @map("job_name")
+  payload        Json
+  idempotencyKey String?   @unique @map("idempotency_key")
+  enqueuedAt     DateTime? @map("enqueued_at")
+  failedAt       DateTime? @map("failed_at")
+  failureReason  String?   @map("failure_reason")
+  attempts       Int       @default(0)
 
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([enqueuedAt])
   @@map("outbox")

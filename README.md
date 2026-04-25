@@ -215,6 +215,7 @@ Production uses Docker Compose for `api` / `web` / `admin` / `build-worker` / `r
 | `docs/ARCHITECTURE.md` | Technical design — modules, data layer, auth, integrations, security. The "how." |
 | `docs/DECISION-LOG.md` | Locked-in decisions with rationale. Append-only; supersede rather than rewrite. |
 | `docs/BUILD-PLAN.md` | Milestone tracker — current focus, completed work, what's next. |
+| `docs/CARRYOVERS.md` | Loose ends: small things deferred from a milestone. Deploy items, conditional refactors, "revisit if X." |
 | `docs/pricelabs-integration.md` | PriceLabs Customer API integration plan. |
 | `docs/loging-tax-plan.md` | Oregon transient lodging tax — rates, filing schedule, data model. |
 | `docs/calendar-sync-plan.md` | iCal import/export implementation reference. |

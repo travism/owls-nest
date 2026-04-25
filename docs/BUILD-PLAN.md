@@ -10,6 +10,7 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 > **Now:** ✅ M4 complete — ready for M5
 > **Next up:** M5 — Public Astro site
+> **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
 Last updated: 2026-04-25 (after M4; 194 tests passing)
 
@@ -89,9 +90,9 @@ All M1 acceptance criteria pass. Postgres `owlsnest` role + database created on 
 
 Verified 2026-04-25.
 
-**Carryovers:**
-- Real Redis on host (currently using MemoryStore — fine for dev, must use Compose Redis for prod). Revisit when infrastructure lands.
-- ~~CSRF error envelope unification.~~ Resolved 2026-04-25 via `ApiExceptionFilter` (`apps/api/src/common/api-exception.filter.ts`) — every error now uses `{error: {code, message, details?}}` shape; SPA and TestClient retry on `code === 'CSRF_INVALID'` only, no more regex fallbacks.
+**Carryovers:** tracked centrally in [`CARRYOVERS.md`](CARRYOVERS.md):
+- CO-1 (Redis on host or Compose) — open
+- CO-9 (CSRF error envelope unification) — ✅ resolved 2026-04-25
 
 **Tests:**
 - Unit: `apps/api/src/auth/password.service.spec.ts`, `totp.service.spec.ts`, `lockout.service.spec.ts` (18 tests).
@@ -143,7 +144,7 @@ Verified 2026-04-25.
 
 - [x] `CalendarModule` export controller + `CalendarExportService` per `calendar-sync-plan.md` §3
 - [x] **Both filters wired:** `Booking.source = 'direct'` AND `BlockedDate.reason IN (manual_block, maintenance)`
-- [ ] Cloudflare path rewrite for `/calendar.ics` → `/api/v1/calendar/export.ics` *(deferred — done at the edge in production)*
+- [→] Cloudflare path rewrite for `/calendar.ics` *(carryover CO-2 — production deploy)*
 - [x] `Content-Type: text/calendar; charset=utf-8`, `Cache-Control: no-cache, no-store, must-revalidate`, `Content-Disposition: inline; filename="owlsnest-calendar.ics"`, CRLF line endings, `TRANSP:OPAQUE` on every VEVENT, RFC 5545 escaping
 - [x] Stable UIDs (`booking-<uuid>@owlsnest.com`, `block-<uuid>@owlsnest.com`) — never regenerated on feed refresh
 - [x] Line folding at 75 octets, byte-aware (multibyte safe)
@@ -153,8 +154,9 @@ Verified 2026-04-25.
 
 **Acceptance:** smoke test confirms feed serializes correctly with mixed direct/OTA rows in the dev DB. Direct bookings + manual blocks present; OTA Booking row absent (no `booking-22222…` UID); OTA-imported BlockedDate rows would be absent if any existed. Verified 2026-04-25.
 
-**Deferred:**
-- `webcal.fyi` validator pass — requires public hostname; will run as part of the production deploy checklist alongside the Cloudflare path rewrite.
+**Carryovers** (tracked in [`CARRYOVERS.md`](CARRYOVERS.md)):
+- CO-2 — Cloudflare path rewrite for `/calendar.ics`
+- CO-3 — `webcal.fyi` validator pass
 
 **Notes:**
 - iCal helpers (`apps/api/src/calendar/ical.ts`) are a pure-functional module — easy to reuse from M2.9 (iCal import) and any future calendar feature.

@@ -127,15 +127,29 @@ Verified 2026-04-25.
 ### M4 — iCal export feed
 **Status:** ⬜ Not started
 
+**Inclusion / exclusion rules** (locked in D-015 + `calendar-sync-plan.md` §3.2):
+
+| Source | Include in export? |
+|---|---|
+| `Booking` where `source = 'direct'` AND `status IN ('approved', 'confirmed', 'completed')` | ✅ |
+| `Booking` where `source IN ('airbnb', 'vrbo', 'booking_com', 'google')` | ❌ never (would reflect OTA bookings back to themselves) |
+| `BlockedDate` where `reason IN ('manual_block', 'maintenance')` | ✅ |
+| `BlockedDate` where `reason = 'ota_booking'` (any `sourcePlatform`) | ❌ never |
+| `Booking` where `status IN ('inquiry', 'pending_approval', 'cancelled')` | ❌ |
+
+**Tasks:**
+
 - [ ] `CalendarModule` export controller + `CalendarExportService` per `calendar-sync-plan.md` §3
+- [ ] **Both filters wired:** `Booking.source = 'direct'` AND `BlockedDate.reason != 'ota_booking'`
 - [ ] Cloudflare path rewrite for `/calendar.ics` → `/api/v1/calendar/export.ics`
-- [ ] Excludes OTA-imported blocks (per D-015)
+- [ ] `Content-Type: text/calendar; charset=utf-8`, `Cache-Control: no-cache`, CRLF line endings, `TRANSP:OPAQUE` on every VEVENT, RFC 5545 escaping
+- [ ] Stable UIDs (`booking-<uuid>@owlsnest.com`, `block-<uuid>@owlsnest.com`) — never regenerated on feed refresh
 - [ ] Passes `webcal.fyi` validator
-- [ ] **Unit tests** — `CalendarExportService.generateExportFeed()`, VEVENT formatter, date-format helpers, special-character escaping (RFC 5545 edge cases)
-- [ ] **E2E tests** — `/api/v1/calendar/export.ics` returns `text/calendar`, Cache-Control no-cache, valid VCALENDAR; with empty data; with direct bookings only; with manual blocks; OTA-imported blocks correctly excluded; UID stability across requests
+- [ ] **Unit tests** — `CalendarExportService.generateExportFeed()` (every inclusion/exclusion branch from the table above), VEVENT formatter, date-format helpers, special-character escaping
+- [ ] **E2E tests** — `/api/v1/calendar/export.ics` returns the right content-type and headers; valid VCALENDAR with empty data; with one direct booking; with one manual block; with one maintenance block; OTA `BlockedDate` (`reason='ota_booking'`) correctly excluded; OTA `Booking` (`source='airbnb'`) correctly excluded; cancelled/pending direct bookings correctly excluded; UID stability across two consecutive requests
 - [ ] `pnpm test:all` green
 
-**Acceptance:** Pasting `https://owlsnest.com/calendar.ics` into Airbnb/VRBO succeeds; feed contains all confirmed direct bookings + manual blocks; no OTA-imported re-exports; full test suite green.
+**Acceptance:** Pasting `https://owlsnest.com/calendar.ics` into Airbnb/VRBO succeeds; feed contains exactly the rows in the ✅ rows of the table above; nothing from the ❌ rows; full test suite green.
 
 ---
 

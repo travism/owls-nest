@@ -15,6 +15,20 @@ Last updated: 2026-04-25
 
 ---
 
+## ⚠️ Testing requirement (READ THIS FIRST)
+
+**Every module and feature requires BOTH unit tests AND end-to-end tests.** Not "unit OR e2e" — both. A milestone is not ✅ until:
+
+1. **Unit tests** cover the pure logic of every new service / hook / schema / utility (target: every public method or branch).
+2. **E2E tests** cover every new HTTP endpoint, every user-visible flow, and every state transition (auth, booking lifecycle, etc.).
+3. **Both run green in `pnpm test:all`** before the milestone status flips to ✅.
+
+If a feature has no testable behavior at either level (rare — usually pure config), document why in the milestone notes.
+
+The full discipline (what to write, where it lives, runners, hooks) is detailed at the bottom of this file: § "Testing discipline".
+
+---
+
 ## Phase 0 — Planning & Architecture
 
 | ID | Milestone | Status |
@@ -94,8 +108,12 @@ Verified 2026-04-25.
 - [ ] `BlockedDate` manual block CRUD with date-range picker in admin
 - [ ] `TaxModule` — calculation against seeded jurisdictions (1.5% state + 9% city)
 - [ ] `/api/v1/pricing/quote` returns breakdown matching `loging-tax-plan.md` §5.3 sample
+- [ ] **Unit tests** — `PropertyService`, `PricingService`, `TaxService` (every method + every error branch); `PricingQuoteRequest` schema in `packages/shared`
+- [ ] **E2E tests** — Property settings CRUD endpoints; pricing quote endpoint (happy path + min-stay violation + missing dates + 30-night exemption); blocked-date CRUD endpoints
+- [ ] **Admin component tests** — property settings form, blocked-dates picker
+- [ ] `pnpm test:all` green
 
-**Acceptance:** Admin can edit property, pricing, manual blocks; quote endpoint returns correct two-tax breakdown.
+**Acceptance:** Admin can edit property, pricing, manual blocks; quote endpoint returns correct two-tax breakdown; full test suite green.
 
 ---
 
@@ -106,8 +124,11 @@ Verified 2026-04-25.
 - [ ] Cloudflare path rewrite for `/calendar.ics` → `/api/v1/calendar/export.ics`
 - [ ] Excludes OTA-imported blocks (per D-015)
 - [ ] Passes `webcal.fyi` validator
+- [ ] **Unit tests** — `CalendarExportService.generateExportFeed()`, VEVENT formatter, date-format helpers, special-character escaping (RFC 5545 edge cases)
+- [ ] **E2E tests** — `/api/v1/calendar/export.ics` returns `text/calendar`, Cache-Control no-cache, valid VCALENDAR; with empty data; with direct bookings only; with manual blocks; OTA-imported blocks correctly excluded; UID stability across requests
+- [ ] `pnpm test:all` green
 
-**Acceptance:** Pasting `https://owlsnest.com/calendar.ics` into Airbnb/VRBO succeeds; feed contains all confirmed direct bookings + manual blocks; no OTA-imported re-exports.
+**Acceptance:** Pasting `https://owlsnest.com/calendar.ics` into Airbnb/VRBO succeeds; feed contains all confirmed direct bookings + manual blocks; no OTA-imported re-exports; full test suite green.
 
 ---
 
@@ -120,8 +141,13 @@ Verified 2026-04-25.
 - [ ] TLT line-item display (Oregon Lodging Tax 1.5%, Redmond Lodging Tax 9.0%)
 - [ ] Media volume serving gallery images at `/media/gallery/*`
 - [ ] Lighthouse perf ≥ 90 on Home
+- [ ] **Unit tests** — date-utility helpers (calendar grid, available-day classification), tax line-item formatter, currency display
+- [ ] **E2E tests** — `/api/v1/availability?from=…&to=…` (correct unavailable ranges from blocked + bookings), build-time content endpoint
+- [ ] **Astro page render tests** — every page renders without errors, has expected H1/title/meta tags
+- [ ] **Component tests** — booking calendar React island (date selection, min-stay enforcement UI, quote breakdown display)
+- [ ] `pnpm test:all` green
 
-**Acceptance:** Calendar renders 365 days within 1s; quote endpoint matches admin-side calculation byte-for-byte.
+**Acceptance:** Calendar renders 365 days within 1s; quote endpoint matches admin-side calculation byte-for-byte; full test suite green.
 
 ---
 
@@ -132,8 +158,13 @@ Verified 2026-04-25.
 - [ ] Astro Book page → React inquiry form → API
 - [ ] Admin "Inquiries" view: list, detail, mark responded, convert to booking request
 - [ ] Email + SMS admin notification on new inquiry (per D-018)
+- [ ] **Unit tests** — `InquiryService` (create + status transitions + convert-to-booking); inquiry → outbox notification dispatch logic
+- [ ] **E2E tests** — `POST /api/v1/inquiries` (happy path + validation errors + invalid date range); admin `GET /inquiries` + status transitions; outbox row created with the right notification job
+- [ ] **Component tests** — public inquiry form (validation surfacing, submit, success state); admin inquiry list + detail
+- [ ] **Schema tests** — already covered for `InquiryCreateSchema` in `packages/shared`; add cases for any new fields
+- [ ] `pnpm test:all` green
 
-**Acceptance:** Submit inquiry → `Inquiry` row created → admin gets email + SMS → visible in admin SPA.
+**Acceptance:** Submit inquiry → `Inquiry` row created → admin gets email + SMS → visible in admin SPA; full test suite green.
 
 ---
 
@@ -146,8 +177,12 @@ Verified 2026-04-25.
 - [ ] Outbox emits confirmation SMS/email + `rebuild-site` job
 - [ ] Conflict detection at approval time (calls `AvailabilityService`)
 - [ ] WebhookEvent idempotency table prevents double-processing
+- [ ] **Unit tests** — `BookingService` state machine (every transition allowed + every disallowed transition rejected); `AvailabilityService.checkAvailability()` (no conflict / direct conflict / OTA conflict / same-day turnaround); Stripe adapter (with injected fake)
+- [ ] **E2E tests** — full happy path through `/api/v1/bookings/request` → admin approve → simulated Stripe webhook → confirmation; conflict detection at approval; webhook idempotency (same event id processed twice → no duplicate side-effects); webhook signature verification rejects bad signatures
+- [ ] **Component tests** — public request-to-book form; admin booking-detail view + approval action
+- [ ] `pnpm test:all` green
 
-**Acceptance:** Full happy path — guest selects dates → submits request → admin approves → guest pays → confirmation arrives → `BlockedDate` exists → export `.ics` updated.
+**Acceptance:** Full happy path — guest selects dates → submits request → admin approves → guest pays → confirmation arrives → `BlockedDate` exists → export `.ics` updated; full test suite green.
 
 ---
 
@@ -159,8 +194,12 @@ Verified 2026-04-25.
 - [ ] Modify dates (re-quotes price; refund or charge difference)
 - [ ] Refund flow wraps Stripe call in Prisma transaction
 - [ ] All four actions write AuditLogEntry
+- [ ] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one); refund-amount calculator; modify-dates re-quote logic
+- [ ] **E2E tests** — decline (sends notification, transitions status); cancel at each tier (30+ days = full refund, 14–29 = 50%, <14 = $0); modify dates (refund vs. charge difference); refund failure rolls back DB state; AuditLogEntry written for each action with correct before/after
+- [ ] **Component tests** — admin booking-detail action buttons (cancel confirms, modify-dates form)
+- [ ] `pnpm test:all` green
 
-**Acceptance:** All four actions work end-to-end; cancellation tier logic applied; audit log captures every action.
+**Acceptance:** All four actions work end-to-end; cancellation tier logic applied; audit log captures every action; full test suite green.
 
 ---
 
@@ -172,7 +211,7 @@ Verified 2026-04-25.
 
 **Goal:** Day-to-day operations automated. Status: ⬜ Not started.
 
-Milestones to be detailed when Phase 1 is ~75% complete. Scope per PRD §14:
+Milestones to be detailed (with explicit unit + e2e test checkboxes per the testing discipline rule above) when Phase 1 is ~75% complete. Scope per PRD §14:
 
 - [ ] **M2.1** Cleaner roster + priority ranking
 - [ ] **M2.2** Cleaner SMS waterfall via Twilio (BullMQ `cleaner-waterfall` queue)
@@ -192,7 +231,7 @@ Milestones to be detailed when Phase 1 is ~75% complete. Scope per PRD §14:
 
 **Goal:** Brand presence + repeat-guest infrastructure + dynamic pricing. Status: ⬜ Not started.
 
-Scope per PRD §14:
+Milestones to be detailed with explicit unit + e2e test checkboxes per the testing discipline rule above. Scope per PRD §14:
 
 - [ ] **M3.1** Blog post editor + publish flow → `rebuild-site` job
 - [ ] **M3.2** Area guide content management
@@ -211,7 +250,7 @@ Scope per PRD §14:
 
 **Goal:** Reporting, analytics, growth-ready. Status: ⬜ Not started.
 
-Scope per PRD §14:
+Milestones to be detailed with explicit unit + e2e test checkboxes per the testing discipline rule above. Scope per PRD §14:
 
 - [ ] **M4.1** Revenue dashboard with charts
 - [ ] **M4.2** Per-booking financial breakdown
@@ -240,26 +279,63 @@ This file is the answer to "where are we?" — keep it accurate.
 
 ## Testing discipline
 
-**Every milestone ships with tests.** Acceptance criteria for any new feature must include the relevant tests passing in CI before the milestone is marked ✅.
+### The rule: both, every time
 
-**Test runners:**
-- `apps/api` — Jest. Unit tests co-located as `*.spec.ts`; E2E tests under `test/*.e2e-spec.ts` (boots full Nest app + Postgres test DB).
+**Every module and every user-visible feature ships with both a unit test suite and an end-to-end test suite.** A milestone does not move to ✅ until both pass in `pnpm test:all`.
+
+This is not a nice-to-have. The whole point of the harness is regression detection — if a future change breaks auth, breaks the booking lifecycle, or loosens a Zod schema, a `git push` should fail loudly. That only works if coverage is comprehensive at both levels.
+
+### What to write — by code shape
+
+| You wrote… | Unit test (always) | E2E test (always) |
+|---|---|---|
+| **NestJS service** (e.g. `BookingService`) | `*.spec.ts` next to it; mock Prisma at the boundary; cover every public method, every error branch | hit the controller endpoints that call it via supertest in `test/*.e2e-spec.ts`; assert DB state changed correctly |
+| **NestJS controller / endpoint** | usually skip — controllers should be thin (validation + delegation) | required in `test/*.e2e-spec.ts` — every HTTP method × path combo; happy path + at least one failure mode (auth, validation, conflict, etc.) |
+| **NestJS guard / pipe / interceptor** | `*.spec.ts` with the request/response harness | covered indirectly by the e2e test of any endpoint it protects — but specifically test that it BLOCKS unauth'd traffic |
+| **Zod schema** in `packages/shared` | `*.test.ts` — every required field, every refinement, every invalid case (Vitest) | covered indirectly by the e2e test of the endpoint that uses it |
+| **React page / component** | `*.test.tsx` — render with providers, assert structure + a11y attributes (Vitest + RTL) | hit the user flow via the api e2e test of the endpoints the page calls; full browser-level e2e via Playwright is a future addition |
+| **Background worker / BullMQ processor** | `*.spec.ts` — call the processor function directly with a fake job | e2e: enqueue a real job, await consumption, assert side-effects |
+| **Integration adapter** (Stripe / Twilio / etc.) | `*.spec.ts` against an injected fake | e2e: webhook handler test with a signed payload; provider adapter itself tested with a real sandbox account in a separate suite (out of CI) |
+
+### What "covered" means
+
+- **Every public service method** has at least one unit test exercising the happy path and at least one for each error branch.
+- **Every endpoint** has at least one e2e test for the happy path AND at least one for each documented failure mode (401, 403, 409, validation).
+- **Every state transition** in a lifecycle (e.g. booking inquiry → pending → confirmed → cancelled) has an e2e test that walks it.
+- **Every Zod schema** has a valid case AND an invalid case for every required field / refinement.
+
+If you find yourself thinking "this is too small to test" — write the test anyway. The cost of writing a tiny test is far less than the cost of debugging a regression six months from now.
+
+### Test runners
+
+- `apps/api` — Jest. Unit specs co-located as `*.spec.ts`; e2e under `test/*.e2e-spec.ts` (boots full Nest app + Postgres test DB).
 - `packages/shared` — Vitest (Zod schema tests).
 - `apps/admin` — Vitest + Testing Library (component / hook tests).
 
-**Commands:**
-- `pnpm test` — fast unit suites across all packages (~30s).
+### Commands
+
+- `pnpm test` — unit suites across all packages (~30s).
 - `pnpm test:e2e` — API integration tests (~50s, requires Postgres on host).
-- `pnpm test:all` — full suite.
+- `pnpm test:all` — full suite (must pass before pushing).
 
-**Test database:** `owlsnest_test` Postgres database (separate from dev `owlsnest`). Migrations applied on creation; `truncateAll` helper wipes all rows between tests so each spec runs on a clean slate.
+### Test database
 
-**Git hooks (husky):**
+`owlsnest_test` Postgres database (separate from dev `owlsnest`). Migrations applied on creation; `truncateAll` helper in `apps/api/test/test-helpers.ts` wipes all tables before each spec so e2e tests are isolated.
+
+### Git hooks (husky)
+
 - `pre-commit` — `pnpm typecheck && pnpm test` (unit tests only, fast).
-- `pre-push` — `pnpm test:all` (full suite incl. E2E). Skip with `--no-verify` only when intentional.
+- `pre-push` — `pnpm test:all` (full suite incl. e2e). Skip with `--no-verify` only when truly intentional.
 
-**For each new feature:**
-- Pure logic → unit test in the same package.
-- Service touching DB / external → e2e test that hits the real endpoint via supertest.
-- React component → component test rendering with required providers.
-- New Zod schema → exhaustive valid + invalid cases in `*.test.ts`.
+### Per-milestone checklist template
+
+Every milestone in this file should include test line items in its checklist. Pattern:
+
+```
+- [ ] {Feature implementation}
+- [ ] Unit tests for {service / schema / hook / etc.}
+- [ ] E2E tests for {endpoint / flow}
+- [ ] `pnpm test:all` green
+```
+
+Don't mark the milestone ✅ until the test items are checked AND the whole suite is green.

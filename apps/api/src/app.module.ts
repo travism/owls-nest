@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { HealthModule } from './health/health.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -14,7 +17,10 @@ import { HealthModule } from './health/health.module';
         customProps: () => ({ service: 'api' }),
       },
     }),
+    PrismaModule,
+    RedisModule,
     HealthModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

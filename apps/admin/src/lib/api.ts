@@ -1,0 +1,140 @@
+// Tiny API client. Handles credentials and CSRF token automatically.
+// CSRF flow:
+//   1. On boot (or 403), fetch GET /api/v1/auth/csrf-token to set the cookie + receive the token.
+//   2. Cache the token in memory; send via x-csrf-token header on all non-GET requests.
+
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE ?? 'http://localhost:3000';
+
+let csrfToken: string | null = null;
+
+async function fetchCsrfToken(): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/v1/auth/csrf-token`, {
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error('Failed to fetch CSRF token');
+  const data = await res.json();
+  csrfToken = data.token;
+  return data.token;
+}
+
+export interface ApiErrorBody {
+  error: { code: string; message?: string; details?: unknown };
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string,
+    message: string,
+    public details?: unknown,
+  ) {
+    super(message);
+  }
+}
+
+async function call<T>(
+  path: string,
+  init: RequestInit & { method?: string } = {},
+): Promise<T> {
+  const method = init.method ?? 'GET';
+  const isMutating = method !== 'GET' && method !== 'HEAD';
+
+  if (isMutating && !csrfToken) {
+    await fetchCsrfToken();
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set('Accept', 'application/json');
+  if (init.body) headers.set('Content-Type', 'application/json');
+  if (isMutating && csrfToken) headers.set('x-csrf-token', csrfToken);
+
+  let res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    method,
+    headers,
+    credentials: 'include',
+  });
+
+  // Auto-retry once on CSRF rejection (token may have rotated after session change)
+  if (isMutating && res.status === 403) {
+    try {
+      const body = (await res.clone().json()) as Partial<ApiErrorBody> & { message?: string };
+      const code = body?.error?.code;
+      const msg = (body?.error?.message ?? body?.message ?? '') as string;
+      const looksCsrf =
+        code === 'EBADCSRFTOKEN' || code === 'CSRF_INVALID' || /csrf/i.test(msg);
+      if (looksCsrf) {
+        await fetchCsrfToken();
+        headers.set('x-csrf-token', csrfToken!);
+        res = await fetch(`${API_BASE}${path}`, {
+          ...init,
+          method,
+          headers,
+          credentials: 'include',
+        });
+      }
+    } catch {
+      // not JSON or no error code; fall through to error handling
+    }
+  }
+
+  if (!res.ok) {
+    let errBody: Partial<ApiErrorBody> = {};
+    try {
+      errBody = await res.json();
+    } catch {
+      // ignore
+    }
+    const code = errBody?.error?.code ?? 'INTERNAL_ERROR';
+    const message = errBody?.error?.message ?? `Request failed (${res.status})`;
+    throw new ApiError(res.status, code, message, errBody?.error?.details);
+  }
+
+  if (res.status === 204) return undefined as T;
+  return res.json();
+}
+
+export const api = {
+  get: <T>(path: string) => call<T>(path),
+  post: <T>(path: string, body?: unknown) =>
+    call<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  primeCsrf: fetchCsrfToken,
+};
+
+// ----- Typed auth endpoints -----
+
+export interface SessionUser {
+  id: string;
+  email: string;
+}
+
+export const authApi = {
+  whoami: () => api.get<{ user: SessionUser }>('/api/v1/auth/admin/whoami'),
+  login: (email: string, password: string) =>
+    api.post<{ challenge: 'totp'; challengeToken: string }>(
+      '/api/v1/auth/admin/login',
+      { email, password },
+    ),
+  totp: (challengeToken: string, code: string) =>
+    api.post<{ user: SessionUser }>('/api/v1/auth/admin/totp', {
+      challengeToken,
+      code,
+    }),
+  recovery: (challengeToken: string, code: string) =>
+    api.post<{ user: SessionUser }>('/api/v1/auth/admin/recovery', {
+      challengeToken,
+      code,
+    }),
+  logout: () => api.post<{ ok: true }>('/api/v1/auth/admin/logout'),
+  setup: (email: string, password: string) =>
+    api.post<{ otpauthUrl: string; qrDataUrl: string; setupToken: string }>(
+      '/api/v1/auth/admin/setup',
+      { email, password },
+    ),
+  setupVerify: (setupToken: string, totpCode: string) =>
+    api.post<{ recoveryCodes: string[] }>('/api/v1/auth/admin/setup/verify', {
+      setupToken,
+      totpCode,
+    }),
+};

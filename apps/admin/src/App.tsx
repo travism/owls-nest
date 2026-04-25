@@ -1,32 +1,26 @@
-import { Routes, Route, Link } from 'react-router-dom';
-
-function Dashboard() {
-  return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem' }}>
-      <h1>Owl's Nest Admin</h1>
-      <p>Shell placeholder. Auth + dashboard land in M2.</p>
-      <nav style={{ marginTop: '1rem' }}>
-        <Link to="/login">Login</Link>
-      </nav>
-    </main>
-  );
-}
-
-function Login() {
-  return (
-    <main style={{ fontFamily: 'system-ui, sans-serif', padding: '2rem' }}>
-      <h1>Login</h1>
-      <p>Login form lands in M2.</p>
-      <Link to="/">Back to dashboard</Link>
-    </main>
-  );
-}
+import { Routes, Route } from 'react-router-dom';
+import { AuthBoundary } from './auth/AuthBoundary';
+import { LoginPage } from './pages/Login';
+import { TotpPage } from './pages/Totp';
+import { RecoveryPage } from './pages/Recovery';
+import { SetupPage } from './pages/Setup';
+import { DashboardPage } from './pages/Dashboard';
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login/totp" element={<TotpPage />} />
+      <Route path="/login/recovery" element={<RecoveryPage />} />
+      <Route path="/setup" element={<SetupPage />} />
+      <Route
+        path="/"
+        element={
+          <AuthBoundary>
+            <DashboardPage />
+          </AuthBoundary>
+        }
+      />
     </Routes>
   );
 }

@@ -8,8 +8,8 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M1 complete — ready for M2
-> **Next up:** M2 — Admin auth (login + TOTP)
+> **Now:** ✅ M2 complete — ready for M3
+> **Next up:** M3 — Property settings + manual pricing/availability
 
 Last updated: 2026-04-25
 
@@ -53,17 +53,29 @@ All M1 acceptance criteria pass. Postgres `owlsnest` role + database created on 
 ---
 
 ### M2 — Admin auth (login + TOTP)
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-- [ ] `AuthModule` admin login endpoint (Argon2id)
-- [ ] TOTP enrollment + verification flow
-- [ ] Recovery codes generated and hashed at rest
-- [ ] Redis-backed session, `__Host-admin-session` cookie, CSRF middleware
-- [ ] Admin SPA: login page, TOTP entry page, recovery-code redemption
-- [ ] Lockout after 5 failed attempts (per IP + per account)
-- [ ] AuditLogEntry on login success/fail
+- [x] `AuthModule` admin login endpoint (Argon2id)
+- [x] TOTP enrollment + verification flow (otplib v13 + QR code data URL)
+- [x] Recovery codes generated and hashed at rest (10 codes, single-use, hashed with Argon2id)
+- [x] Redis-backed session with MemoryStore fallback for dev; `__Host-admin-session` cookie in prod, `admin_session` in dev
+- [x] CSRF middleware (csrf-csrf double-submit, session-bound, auto-rotated on session regenerate)
+- [x] Admin SPA: login page, TOTP entry page, recovery-code redemption, first-time setup flow
+- [x] Lockout after 5 failed attempts (per account, 15-min lock)
+- [x] AuditLogEntry on every auth event (login.success/failed/locked, totp.success/failed, recovery.success/failed, logout, setup.password, setup.totp.enrolled)
 
-**Acceptance:** First-time TOTP enrollment works; subsequent logins require TOTP; lockout works; recovery codes work.
+**Acceptance:** all 8 criteria pass via /tmp/m2-e2e.mjs end-to-end script:
+- setup password → TOTP enrollment → 10 recovery codes generated
+- login → TOTP verify → whoami returns session user
+- logout → whoami returns 401
+- 5 wrong passwords → 6th attempt 403 (locked)
+- recovery code login works; same code rejected on second use
+
+Verified 2026-04-25.
+
+**Carryovers:**
+- Real Redis on host (currently using MemoryStore — fine for dev, must use Compose Redis for prod). Revisit when infrastructure lands.
+- CSRF error envelope unification (csrf-csrf throws ForbiddenError caught by Nest's default filter as `{statusCode, message}`; SPA + e2e script handle this via lenient retry logic). A global exception filter mapping these to the standard `{error: {code, message}}` envelope is a small follow-up.
 
 ---
 

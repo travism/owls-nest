@@ -1,0 +1,33 @@
+{
+  "name": "@owlsnest/prisma",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "studio": "prisma studio",
+    "seed": "tsx prisma/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,55 @@
+import { z } from 'zod';
+
+const EnvSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(3000),
+
+  DATABASE_URL: z.string().url(),
+
+  REDIS_HOST: z.string().default('redis'),
+  REDIS_PORT: z.coerce.number().int().positive().default(6379),
+
+  // Secrets — required in production, optional in dev so the API
+  // can boot before all integrations are wired
+  ADMIN_TOTP_KEY: z.string().min(32).optional(),
+  SESSION_SECRET: z.string().min(32).optional(),
+  CLEANER_TOKEN_SECRET: z.string().min(32).optional(),
+
+  // Integrations
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
+  MAILERSEND_API_KEY: z.string().optional(),
+  MAILERSEND_FROM_EMAIL: z.string().email().optional(),
+  PRICELABS_API_KEY: z.string().optional(),
+  PRICELABS_LISTING_ID: z.string().optional(),
+});
+
+export type Env = z.infer<typeof EnvSchema>;
+
+export function loadEnv(): Env {
+  const parsed = EnvSchema.safeParse(process.env);
+  if (!parsed.success) {
+    console.error('Invalid environment variables:');
+    console.error(parsed.error.flatten().fieldErrors);
+    process.exit(1);
+  }
+
+  // Production secret enforcement
+  if (parsed.data.NODE_ENV === 'production') {
+    const required: Array<keyof Env> = [
+      'ADMIN_TOTP_KEY',
+      'SESSION_SECRET',
+      'CLEANER_TOKEN_SECRET',
+    ];
+    const missing = required.filter((k) => !parsed.data[k]);
+    if (missing.length > 0) {
+      console.error(`Production env missing secrets: ${missing.join(', ')}`);
+      process.exit(1);
+    }
+  }
+
+  return parsed.data;
+}

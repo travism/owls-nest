@@ -1,0 +1,25 @@
+{
+  "name": "owlsnest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Owl's Nest platform — guest site, booking engine, and admin dashboard",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "build": "pnpm -r --filter='./apps/**' --filter='./packages/**' run build",
+    "dev": "pnpm -r --parallel --filter='./apps/**' run dev",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "prisma:generate": "pnpm --filter @owlsnest/prisma run generate",
+    "prisma:migrate": "pnpm --filter @owlsnest/prisma run migrate:dev",
+    "prisma:seed": "pnpm --filter @owlsnest/prisma run seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "@types/node": "^20.14.0"
+  }
+}

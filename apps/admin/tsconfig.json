@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+    "noEmit": true,
+    "composite": false,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src"]
+}

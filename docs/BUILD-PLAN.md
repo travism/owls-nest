@@ -11,7 +11,7 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 > **Now:** ✅ M3 complete — ready for M4
 > **Next up:** M4 — iCal export feed
 
-Last updated: 2026-04-25
+Last updated: 2026-04-25 (after CSRF envelope fix; 146 tests passing)
 
 ---
 
@@ -37,7 +37,7 @@ The full discipline (what to write, where it lives, runners, hooks) is detailed 
 | P0.2 | Supplemental plans (PriceLabs / Tax / Calendar Sync) | ✅ |
 | P0.3 | Architecture document | ✅ |
 | P0.4 | Decision log seeded (D-001 → D-019) | ✅ |
-| P0.5 | Scaffolding plan | ⬜ |
+| P0.5 | Scaffolding plan | ✅ (folded into M1 directly — no separate doc needed) |
 
 ---
 
@@ -112,7 +112,7 @@ Verified 2026-04-25.
 - [x] **E2E tests** — pricing quote (7), property GET/PATCH (6), blocked-date CRUD (7) — 20 e2e tests added
 - [x] **Admin component tests** — `PropertySettings` (3), `BlockedDates` (3) — 6 component tests added
 - [x] **Schema tests** — `Property` (21), `BlockedDate` (8) — 29 schema tests added
-- [x] `pnpm test:all` green (129 tests total)
+- [x] `pnpm test:all` green (129 tests total at M3 completion; 146 after the CSRF envelope fix that landed immediately after)
 
 **Acceptance:** all checklist items pass; smoke test confirms API serves both endpoints with correct payloads. Verified 2026-04-25.
 
@@ -211,6 +211,12 @@ Verified 2026-04-25.
 ---
 
 **Phase 1 done when:** all M1–M8 ✅ and the property can take a real direct booking from a guest.
+
+### Inter-milestone fixes
+
+Small fixes shipped between milestones that don't fit a milestone scope:
+
+- **2026-04-25 — Unified API error envelope.** Global `ApiExceptionFilter` normalizes every error (domain HttpExceptions, csrf-csrf http-errors, unknown errors) into `{error: {code, message, details?}}`. Resolves the M2 carryover. Adds `BAD_REQUEST` + `CSRF_INVALID` to the shared `ErrorCode` enum. SPA + TestClient retry on `code === 'CSRF_INVALID'` only — no more lenient regex fallbacks. +12 unit + 5 e2e tests.
 
 ---
 

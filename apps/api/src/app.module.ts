@@ -4,6 +4,10 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
+import { TaxModule } from './tax/tax.module';
+import { PricingModule } from './pricing/pricing.module';
+import { PropertyModule } from './property/property.module';
+import { BlockedDateModule } from './blocked-date/blocked-date.module';
 
 @Module({
   imports: [
@@ -21,6 +25,10 @@ import { AuthModule } from './auth/auth.module';
     RedisModule,
     HealthModule,
     AuthModule,
+    TaxModule,
+    PricingModule,
+    PropertyModule,
+    BlockedDateModule,
   ],
 })
 export class AppModule {}

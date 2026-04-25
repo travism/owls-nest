@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type AuditAction =
+  // Auth
   | 'auth.login.success'
   | 'auth.login.failed'
   | 'auth.login.locked'
@@ -11,7 +12,18 @@ export type AuditAction =
   | 'auth.recovery.failed'
   | 'auth.logout'
   | 'auth.setup.password'
-  | 'auth.setup.totp.enrolled';
+  | 'auth.setup.totp.enrolled'
+  // Property
+  | 'property.update'
+  // Blocked dates
+  | 'blocked_date.create'
+  | 'blocked_date.delete'
+  // Booking lifecycle (forward-looking; used in M7/M8)
+  | 'booking.approve'
+  | 'booking.decline'
+  | 'booking.cancel'
+  | 'booking.refund'
+  | 'booking.modify';
 
 @Injectable()
 export class AuditService {

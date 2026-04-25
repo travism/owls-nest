@@ -8,6 +8,7 @@ import { TaxModule } from './tax/tax.module';
 import { PricingModule } from './pricing/pricing.module';
 import { PropertyModule } from './property/property.module';
 import { BlockedDateModule } from './blocked-date/blocked-date.module';
+import { CalendarModule } from './calendar/calendar.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { BlockedDateModule } from './blocked-date/blocked-date.module';
     PricingModule,
     PropertyModule,
     BlockedDateModule,
+    CalendarModule,
   ],
 })
 export class AppModule {}

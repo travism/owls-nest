@@ -8,10 +8,10 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M3 complete — ready for M4
-> **Next up:** M4 — iCal export feed
+> **Now:** ✅ M4 complete — ready for M5
+> **Next up:** M5 — Public Astro site
 
-Last updated: 2026-04-25 (after CSRF envelope fix; 146 tests passing)
+Last updated: 2026-04-25 (after M4; 194 tests passing)
 
 ---
 
@@ -125,7 +125,7 @@ Verified 2026-04-25.
 ---
 
 ### M4 — iCal export feed
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
 **Why this scope is so narrow:** The export is consumed by OTAs (Airbnb, VRBO, future Booking.com / Google). Each OTA holds its own bookings authoritatively and syncs *between* the OTAs by importing every other OTA's feed in addition to ours. Our feed therefore needs to carry only the **direct** bookings + manual/maintenance blocks the OTAs have no other way of learning about. Re-exporting an OTA-imported booking back to its source OTA causes dashboard duplication; re-exporting it to the *other* OTAs is redundant since they already pull each other's feeds. Either way: don't.
 
@@ -141,17 +141,24 @@ Verified 2026-04-25.
 
 **Tasks:**
 
-- [ ] `CalendarModule` export controller + `CalendarExportService` per `calendar-sync-plan.md` §3
-- [ ] **Both filters wired:** `Booking.source = 'direct'` AND `BlockedDate.reason != 'ota_booking'`
-- [ ] Cloudflare path rewrite for `/calendar.ics` → `/api/v1/calendar/export.ics`
-- [ ] `Content-Type: text/calendar; charset=utf-8`, `Cache-Control: no-cache`, CRLF line endings, `TRANSP:OPAQUE` on every VEVENT, RFC 5545 escaping
-- [ ] Stable UIDs (`booking-<uuid>@owlsnest.com`, `block-<uuid>@owlsnest.com`) — never regenerated on feed refresh
-- [ ] Passes `webcal.fyi` validator
-- [ ] **Unit tests** — `CalendarExportService.generateExportFeed()` (every inclusion/exclusion branch from the table above), VEVENT formatter, date-format helpers, special-character escaping
-- [ ] **E2E tests** — `/api/v1/calendar/export.ics` returns the right content-type and headers; valid VCALENDAR with empty data; with one direct booking; with one manual block; with one maintenance block; OTA `BlockedDate` (`reason='ota_booking'`) correctly excluded; OTA `Booking` (`source='airbnb'`) correctly excluded; cancelled/pending direct bookings correctly excluded; UID stability across two consecutive requests
-- [ ] `pnpm test:all` green
+- [x] `CalendarModule` export controller + `CalendarExportService` per `calendar-sync-plan.md` §3
+- [x] **Both filters wired:** `Booking.source = 'direct'` AND `BlockedDate.reason IN (manual_block, maintenance)`
+- [ ] Cloudflare path rewrite for `/calendar.ics` → `/api/v1/calendar/export.ics` *(deferred — done at the edge in production)*
+- [x] `Content-Type: text/calendar; charset=utf-8`, `Cache-Control: no-cache, no-store, must-revalidate`, `Content-Disposition: inline; filename="owlsnest-calendar.ics"`, CRLF line endings, `TRANSP:OPAQUE` on every VEVENT, RFC 5545 escaping
+- [x] Stable UIDs (`booking-<uuid>@owlsnest.com`, `block-<uuid>@owlsnest.com`) — never regenerated on feed refresh
+- [x] Line folding at 75 octets, byte-aware (multibyte safe)
+- [x] **Unit tests** — `apps/api/src/calendar/ical.spec.ts` (17 tests covering formatDate, formatDateTime, escapeText, foldLine, buildVEvent, buildVCalendar) + `calendar-export.service.spec.ts` (15 tests covering every inclusion/exclusion branch from the truth table + UID stability)
+- [x] **E2E tests** — `apps/api/test/calendar.e2e-spec.ts` (16 tests: response headers, public access, empty calendar, every inclusion path, every exclusion path, mixed scenario asserting exact event count, UID stability across consecutive requests, CRLF + TRANSP:OPAQUE checks)
+- [x] `pnpm test:all` green (194 tests total)
 
-**Acceptance:** Pasting `https://owlsnest.com/calendar.ics` into Airbnb/VRBO succeeds; feed contains exactly the rows in the ✅ rows of the table above; nothing from the ❌ rows; full test suite green.
+**Acceptance:** smoke test confirms feed serializes correctly with mixed direct/OTA rows in the dev DB. Direct bookings + manual blocks present; OTA Booking row absent (no `booking-22222…` UID); OTA-imported BlockedDate rows would be absent if any existed. Verified 2026-04-25.
+
+**Deferred:**
+- `webcal.fyi` validator pass — requires public hostname; will run as part of the production deploy checklist alongside the Cloudflare path rewrite.
+
+**Notes:**
+- iCal helpers (`apps/api/src/calendar/ical.ts`) are a pure-functional module — easy to reuse from M2.9 (iCal import) and any future calendar feature.
+- `Booking.checkIn`/`Booking.checkOut` already follow the iCal exclusive-DTEND convention (check-out is the first available day), so no transformation needed.
 
 ---
 

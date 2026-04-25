@@ -12,6 +12,7 @@ import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { RedisService } from '../src/redis/redis.service';
 import { buildCsrf } from '../src/auth/csrf';
+import { ApiExceptionFilter } from '../src/common/api-exception.filter';
 
 export interface TestApp {
   app: INestApplication;
@@ -38,6 +39,7 @@ export async function createTestApp(): Promise<TestApp> {
 
   const app = moduleRef.createNestApplication({ bufferLogs: true });
   app.useLogger(app.get(PinoLogger));
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   // Mirror the production middleware stack (minus prod-only bits)
   app.use(cookieParser());

@@ -10,6 +10,7 @@ import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
 import { RedisService } from './redis/redis.service';
 import { buildCsrf } from './auth/csrf';
+import { ApiExceptionFilter } from './common/api-exception.filter';
 
 async function bootstrap() {
   const env = loadEnv();
@@ -17,6 +18,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(PinoLogger));
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const isProd = env.NODE_ENV === 'production';
 

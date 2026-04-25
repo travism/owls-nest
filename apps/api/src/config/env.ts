@@ -1,4 +1,33 @@
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import * as dotenv from 'dotenv';
 import { z } from 'zod';
+
+/**
+ * Walk up from this file's directory looking for a `.env` file. Stops at the
+ * filesystem root. Used in dev so `pnpm dev` "just works" without each
+ * contributor having to remember to `source ../../.env` first.
+ *
+ * In production the API runs inside a Docker container where Compose's
+ * `env_file` directive has already populated process.env — no .env file
+ * is shipped, so this lookup finds nothing and is a no-op.
+ */
+function findEnvFile(): string | null {
+  let dir = __dirname;
+  for (let depth = 0; depth < 10; depth++) {
+    const candidate = resolve(dir, '.env');
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
+if (process.env.NODE_ENV !== 'production') {
+  const envFile = findEnvFile();
+  if (envFile) dotenv.config({ path: envFile });
+}
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),

@@ -4,3 +4,4 @@ export * from './schemas/pricing.js';
 export * from './schemas/error.js';
 export * from './schemas/property.js';
 export * from './schemas/blocked-date.js';
+export * from './schemas/availability.js';

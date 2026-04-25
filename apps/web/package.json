@@ -7,20 +7,28 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "typecheck": "astro check"
+    "typecheck": "astro check",
+    "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/check": "^0.9.4",
     "@astrojs/react": "^3.6.2",
     "@owlsnest/shared": "workspace:*",
     "astro": "^4.16.7",
+    "date-fns": "^4.1.0",
     "react": "^18.3.1",
+    "react-day-picker": "^9.14.0",
     "react-dom": "^18.3.1",
     "typescript": "^5.5.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6",
+    "@testing-library/react": "^16",
     "@types/react": "^18.3.11",
-    "@types/react-dom": "^18.3.0"
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4",
+    "jsdom": "^25",
+    "vitest": "^2.1.9"
   }
 }

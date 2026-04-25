@@ -102,6 +102,17 @@ Disk encryption + encrypted backups are sufficient at single-property scale. Rev
 
 ---
 
+### CO-10 — Lighthouse perf ≥ 90 on Home
+- **Origin:** M5
+- **Type:** deploy
+- **Status:** 🟢 Open
+
+PRD non-functional requirement: guest site pages load in under 2 seconds; Lighthouse perf ≥ 90 on Home. Needs to be measured against the production-built site over the network (not the dev server, which is unminified and serves source maps). Should be part of the production deploy checklist alongside CO-3 (webcal.fyi).
+
+**When:** part of CO-4 (production deploy runbook).
+
+---
+
 ### CO-8 — Media volume → S3-compatible migration
 - **Origin:** D-016
 - **Type:** infrastructure (conditional)

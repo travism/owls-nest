@@ -1,0 +1,191 @@
+/* Site shell: header, nav, footer, hero, common patterns. */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  padding: 0.5rem 1rem;
+  background: var(--color-juniper-darker);
+  color: white;
+  z-index: 100;
+}
+.skip-link:focus { left: 1rem; top: 1rem; }
+
+.site-header {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.brand { text-decoration: none; color: inherit; }
+.brand__name {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--color-juniper-darker);
+  letter-spacing: 0.01em;
+}
+.brand__sub {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.site-nav a {
+  text-decoration: none;
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.site-nav a:hover { color: var(--accent); }
+
+.site-nav__cta {
+  background: var(--color-canyon-terracotta);
+  color: white !important;
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius);
+  transition: background var(--transition);
+}
+.site-nav__cta:hover {
+  background: #b25a40;
+  color: white !important;
+}
+
+.hero {
+  padding: clamp(3rem, 8vw, 6rem) 0;
+  text-align: center;
+  background: linear-gradient(
+    180deg,
+    var(--color-soft-sand) 0%,
+    var(--bg) 100%
+  );
+}
+.hero__eyebrow {
+  display: block;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-canyon-terracotta);
+  margin-bottom: 0.75rem;
+  font-weight: 500;
+}
+.hero p { font-size: 1.15rem; max-width: 38ch; margin-left: auto; margin-right: auto; }
+.hero__cta {
+  display: inline-block;
+  margin-top: 2rem;
+  padding: 0.75rem 1.75rem;
+  background: var(--color-canyon-terracotta);
+  color: white;
+  text-decoration: none;
+  border-radius: var(--radius);
+  font-weight: 500;
+  transition: background var(--transition);
+}
+.hero__cta:hover { background: #b25a40; color: white; }
+
+.section { padding: clamp(2.5rem, 6vw, 5rem) 0; }
+.section--alt { background: var(--color-soft-sand); }
+.section__title { text-align: center; }
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+.feature-card {
+  background: var(--bg-card);
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+}
+.feature-card h3 { margin-top: 0; }
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.gallery-card {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, var(--color-desert-gold) 0%, var(--color-canyon-terracotta) 100%);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: flex-end;
+  padding: 1.25rem;
+  color: white;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  overflow: hidden;
+}
+.gallery-card--juniper {
+  background: linear-gradient(135deg, var(--color-juniper-dark) 0%, var(--color-sage-green) 100%);
+}
+.gallery-card--dusk {
+  background: linear-gradient(135deg, var(--color-dusk-purple) 0%, var(--color-canyon-terracotta) 100%);
+}
+.gallery-card--sand {
+  background: linear-gradient(135deg, var(--color-soft-sand) 0%, var(--color-desert-gold) 100%);
+  color: var(--color-juniper-darker);
+}
+
+.rules-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.rules-list li {
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--color-canyon-terracotta);
+  border-radius: var(--radius);
+}
+
+.site-footer {
+  margin-top: 4rem;
+  padding: 3rem 0 2rem;
+  background: var(--color-juniper-darker);
+  color: var(--color-soft-sand);
+}
+.site-footer__inner {
+  display: grid;
+  gap: 1.5rem;
+  text-align: center;
+}
+.site-footer a {
+  color: var(--color-soft-sand);
+  margin: 0 0.75rem;
+}
+.site-footer__legal {
+  font-size: 0.85rem;
+  color: rgba(237, 228, 211, 0.6);
+  margin-top: 1rem;
+  margin-bottom: 0;
+}

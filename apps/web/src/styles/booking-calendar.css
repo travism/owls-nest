@@ -1,0 +1,96 @@
+/* Layout for the BookingCalendar React island */
+
+.booking-calendar {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+  align-items: start;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 880px) {
+  .booking-calendar {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+.booking-calendar__picker {
+  background: var(--bg-card);
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-calendar__quote {
+  background: var(--bg-card);
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 5rem;
+}
+.booking-calendar__quote h2 {
+  margin-top: 0;
+  font-size: 1.25rem;
+}
+
+.bc-hint {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+}
+
+.bc-muted { color: var(--fg-muted); font-size: 0.9rem; }
+.bc-small { font-size: 0.8rem; margin-top: 0.5rem; }
+
+.bc-quote {
+  width: 100%;
+  margin: 0.75rem 0 1rem;
+  border-collapse: collapse;
+}
+.bc-quote td {
+  padding: 0.5rem 0;
+  font-size: 0.92rem;
+}
+.bc-quote td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.bc-quote__total td {
+  border-top: 1px solid var(--border-strong);
+  padding-top: 0.75rem;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.bc-cta {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.bc-status {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+.bc-status--error {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-fg);
+}
+
+/* react-day-picker custom theme */
+.rdp-root {
+  --rdp-accent-color: var(--color-juniper-dark);
+  --rdp-accent-background-color: var(--color-soft-sand);
+  --rdp-day-height: 2.5rem;
+  --rdp-day-width: 2.5rem;
+  font-family: var(--font-sans);
+}
+.rdp-day_disabled {
+  text-decoration: line-through;
+  color: #c4bfb0 !important;
+}

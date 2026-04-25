@@ -1,19 +1,54 @@
 ---
-const title = "The Owl's Nest — Redmond, Oregon";
+import Site from '../layouts/Site.astro';
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
-    <meta name="description" content="The Owl's Nest — a high-desert retreat in Redmond, Oregon." />
-  </head>
-  <body>
-    <main>
+<Site title="The Owl's Nest — Redmond, Oregon">
+  <section class="hero">
+    <div class="container">
+      <span class="hero__eyebrow">High desert retreat</span>
       <h1>The Owl's Nest</h1>
-      <p>Coming soon.</p>
-    </main>
-  </body>
-</html>
+      <p>
+        A small home in Redmond, Oregon — built for golden-hour walks, Smith Rock
+        sunrises, and slow mornings on the back patio.
+      </p>
+      <a class="hero__cta" href="/book">Check availability</a>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="section__title">Why guests come back</h2>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <h3>Central location</h3>
+          <p>
+            Walking distance to downtown Redmond. Twenty minutes to Smith Rock,
+            forty to Bend, an hour to Mt. Bachelor.
+          </p>
+        </article>
+        <article class="feature-card">
+          <h3>Quiet, comfortable, designed</h3>
+          <p>
+            Sleeps four. Full kitchen, fast wifi, blackout curtains, a record player,
+            and a back patio that catches the evening light.
+          </p>
+        </article>
+        <article class="feature-card">
+          <h3>Direct booking, no fees</h3>
+          <p>
+            Book straight through us — no service fees, no middlemen, and a real
+            person to text if anything comes up.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--alt">
+    <div class="container" style="max-width: 720px; text-align: center;">
+      <h2 class="section__title">Ready when you are</h2>
+      <p>Pick your dates and we'll get back to you within a few hours.</p>
+      <a class="hero__cta" href="/book">Plan your stay</a>
+    </div>
+  </section>
+</Site>

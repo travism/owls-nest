@@ -127,6 +127,8 @@ Verified 2026-04-25.
 ### M4 — iCal export feed
 **Status:** ⬜ Not started
 
+**Why this scope is so narrow:** The export is consumed by OTAs (Airbnb, VRBO, future Booking.com / Google). Each OTA holds its own bookings authoritatively and syncs *between* the OTAs by importing every other OTA's feed in addition to ours. Our feed therefore needs to carry only the **direct** bookings + manual/maintenance blocks the OTAs have no other way of learning about. Re-exporting an OTA-imported booking back to its source OTA causes dashboard duplication; re-exporting it to the *other* OTAs is redundant since they already pull each other's feeds. Either way: don't.
+
 **Inclusion / exclusion rules** (locked in D-015 + `calendar-sync-plan.md` §3.2):
 
 | Source | Include in export? |
@@ -248,9 +250,14 @@ Milestones to be detailed (with explicit unit + e2e test checkboxes per the test
 - [ ] **M2.6** Two-way SMS guest messaging (single Twilio number, inbound routing)
 - [ ] **M2.7** Message templates with `{{var}}` interpolation
 - [ ] **M2.8** Conversation thread view in admin
-- [ ] **M2.9** iCal import from Airbnb + VRBO (30-min poll per D-009)
-- [ ] **M2.10** Conflict detection on booking approval
-- [ ] **M2.11** Manual "Sync Now" button
+- [ ] **M2.9** iCal import — multi-feed architecture (one configurable feed per OTA: Airbnb + VRBO at launch, schema already supports adding Booking.com / Google later). Each feed:
+  - Stored as a `CalendarSync` row (URL, platform, sync interval, active flag, last-sync status)
+  - Polled independently every 30 min per D-009 (one BullMQ job per feed; failure of one doesn't block the others)
+  - Parsed via `node-ical`; events upserted into `BlockedDate` keyed on `(sourceEventUid, calendarSyncId)`; cancellations detected via UID disappearance per `calendar-sync-plan.md` §4.3
+  - Zero-event safety check: feed returning 0 events when prior sync had >0 → preserve existing blocks, mark sync as `warning` (not delete)
+- [ ] **M2.10** Admin "iCal feeds" settings page — add/edit/remove/toggle each OTA feed; show last-sync status, error message, event count per feed
+- [ ] **M2.11** Conflict detection on booking approval (`AvailabilityService.checkAvailability()` reads ALL feeds + direct `Booking` rows + manual blocks)
+- [ ] **M2.12** Manual "Sync Now" button — global (poll all feeds) and per-feed
 
 ---
 

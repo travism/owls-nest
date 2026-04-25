@@ -41,14 +41,14 @@ Last updated: 2026-04-25
 - [x] `apps/build-worker` builds; consumes BullMQ job stub
 - [x] `packages/shared` exports a Zod schema both api + web import
 - [x] `packages/prisma` — schema covers all V1 entities (incl. Outbox, WebhookEvent, AuditLogEntry, CleanerRequestToken, TaxJurisdiction, PricingCacheEntry)
-- [ ] `prisma migrate dev` runs cleanly against host Postgres *(pending live Postgres on host)*
-- [x] Seed script written (runs once Postgres is up)
+- [x] `prisma migrate dev` runs cleanly against host Postgres
+- [x] Seed script populates Property + 2 TaxJurisdictions + default MessageTemplates + AdminUser placeholder
 - [x] Docker Compose runs Redis + api + web + admin + build-worker; `media` and `web-dist` volumes mounted per ARCHITECTURE.md §11.1
 - [x] `.env.example` complete; api env validated by Zod at boot
 
 **Acceptance:** `pnpm install && pnpm -r run build` succeeds for all four apps + both packages. API `node dist/main.js` boots and `curl http://localhost:3000/health` → 200 with `{"status":"ok","uptime":...}`. Web and admin produce static `dist/` output. Verified 2026-04-25.
 
-**Outstanding (carried into M2):** running `prisma migrate dev` against host Postgres + executing the seed end-to-end. Requires Postgres to be installed and configured on the host.
+All M1 acceptance criteria pass. Postgres `owlsnest` role + database created on host; migration applied; seed verified.
 
 ---
 

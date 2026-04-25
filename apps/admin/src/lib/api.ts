@@ -99,6 +99,9 @@ export const api = {
   get: <T>(path: string) => call<T>(path),
   post: <T>(path: string, body?: unknown) =>
     call<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, body?: unknown) =>
+    call<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string) => call<T>(path, { method: 'DELETE' }),
   primeCsrf: fetchCsrfToken,
 };
 
@@ -137,4 +140,22 @@ export const authApi = {
       setupToken,
       totpCode,
     }),
+};
+
+// ----- Property -----
+
+import type { Property, PropertyUpdate, BlockedDate, BlockedDateCreate } from '@owlsnest/shared';
+
+export const propertyApi = {
+  get: () => api.get<Property>('/api/v1/property'),
+  update: (body: PropertyUpdate) => api.patch<Property>('/api/v1/property', body),
+};
+
+// ----- Blocked dates -----
+
+export const blockedDatesApi = {
+  list: () => api.get<BlockedDate[]>('/api/v1/blocked-dates'),
+  create: (body: BlockedDateCreate) =>
+    api.post<BlockedDate>('/api/v1/blocked-dates', body),
+  remove: (id: string) => api.delete<{ ok: true }>(`/api/v1/blocked-dates/${id}`),
 };

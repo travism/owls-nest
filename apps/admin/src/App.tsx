@@ -5,6 +5,8 @@ import { TotpPage } from './pages/Totp';
 import { RecoveryPage } from './pages/Recovery';
 import { SetupPage } from './pages/Setup';
 import { DashboardPage } from './pages/Dashboard';
+import { PropertySettingsPage } from './pages/PropertySettings';
+import { BlockedDatesPage } from './pages/BlockedDates';
 
 export function App() {
   return (
@@ -18,6 +20,22 @@ export function App() {
         element={
           <AuthBoundary>
             <DashboardPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/property"
+        element={
+          <AuthBoundary>
+            <PropertySettingsPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/blocked-dates"
+        element={
+          <AuthBoundary>
+            <BlockedDatesPage />
           </AuthBoundary>
         }
       />

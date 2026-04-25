@@ -4,6 +4,8 @@ import { generate } from 'otplib';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { PasswordService } from '../src/auth/password.service';
+import { TotpService } from '../src/auth/totp.service';
 
 /**
  * Stateful client that keeps cookies + CSRF token across requests,
@@ -44,18 +46,27 @@ export class TestClient {
     return res;
   }
 
-  async post(path: string, body?: object): Promise<request.Response> {
-    return this.postOnce(path, body, false);
+  async post(path: string, body?: object) {
+    return this.mutate('post', path, body);
   }
 
-  private async postOnce(
+  async patch(path: string, body?: object) {
+    return this.mutate('patch', path, body);
+  }
+
+  async delete(path: string) {
+    return this.mutate('delete', path);
+  }
+
+  private async mutate(
+    method: 'post' | 'patch' | 'delete',
     path: string,
-    body: object | undefined,
-    retried: boolean,
+    body?: object,
+    retried = false,
   ): Promise<request.Response> {
     if (!this.csrfToken) await this.primeCsrf();
     const req = request(this.server)
-      .post(path)
+      [method](path)
       .set('Cookie', this.cookieHeader())
       .set('x-csrf-token', this.csrfToken!)
       .set('Content-Type', 'application/json');
@@ -67,7 +78,7 @@ export class TestClient {
       const code = (res.body as any)?.error?.code;
       if (code === 'EBADCSRFTOKEN' || /csrf/i.test(msg)) {
         await this.primeCsrf();
-        return this.postOnce(path, body, true);
+        return this.mutate(method, path, body, true);
       }
     }
     return res;
@@ -180,4 +191,61 @@ export async function seedTestData(prisma: PrismaService): Promise<void> {
 
 export async function getApp(app: INestApplication) {
   return app.getHttpServer();
+}
+
+/**
+ * Pre-enroll an admin user with known credentials so e2e tests can sign in
+ * with one call. Sets password + TOTP secret directly in the DB, mimicking
+ * a user who has already completed the setup flow.
+ *
+ * Returns the credentials needed to sign in.
+ */
+export async function enrollAdmin(
+  prisma: PrismaService,
+  password = 'test-admin-password-99',
+  email = 'admin@owlsnest.local',
+): Promise<{ email: string; password: string; totpSecret: string }> {
+  const passwords = new PasswordService();
+  const totpService = new TotpService();
+  const passwordHash = await passwords.hash(password);
+  const totpSecret = totpService.generateSecret();
+  const totpEncrypted = totpService.encrypt(totpSecret);
+
+  await prisma.adminUser.update({
+    where: { email },
+    data: {
+      passwordHash,
+      totpSecretEncrypted: totpEncrypted,
+      totpEnrolledAt: new Date(),
+      recoveryCodesHashed: [],
+      failedAttempts: 0,
+      lockedUntil: null,
+    },
+  });
+
+  return { email, password, totpSecret };
+}
+
+/**
+ * Drives a TestClient through the full login flow.
+ */
+export async function signIn(
+  client: TestClient,
+  creds: { email: string; password: string; totpSecret: string },
+): Promise<void> {
+  const login = await client.post('/api/v1/auth/admin/login', {
+    email: creds.email,
+    password: creds.password,
+  });
+  if (login.status !== 200) {
+    throw new Error(`signIn login failed: ${login.status} ${JSON.stringify(login.body)}`);
+  }
+  const code = await totp(creds.totpSecret);
+  const verify = await client.post('/api/v1/auth/admin/totp', {
+    challengeToken: login.body.challengeToken,
+    code,
+  });
+  if (verify.status !== 200) {
+    throw new Error(`signIn totp failed: ${verify.status} ${JSON.stringify(verify.body)}`);
+  }
 }

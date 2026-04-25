@@ -80,11 +80,11 @@ async function bootstrap() {
     }
     next();
   });
-  // Apply protection only to admin auth routes (except the token endpoint
-  // and whoami which is GET). Other routes (public booking, webhooks)
-  // don't use sessions so they're not subject to CSRF.
+  // Apply CSRF protection to all non-GET /api/v1 routes. Webhooks live
+  // outside /api/v1 (under /webhooks/*) and verify provider signatures
+  // instead, so they're not subject to CSRF.
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const protectedPath = req.path.startsWith('/api/v1/auth/admin');
+    const protectedPath = req.path.startsWith('/api/v1');
     const safeMethod = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
     if (!protectedPath || safeMethod) return next();
     csrf.doubleCsrfProtection(req, res, next);

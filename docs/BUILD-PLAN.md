@@ -8,8 +8,8 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M2 complete — ready for M3
-> **Next up:** M3 — Property settings + manual pricing/availability
+> **Now:** ✅ M3 complete — ready for M4
+> **Next up:** M4 — iCal export feed
 
 Last updated: 2026-04-25
 
@@ -101,19 +101,26 @@ Verified 2026-04-25.
 ---
 
 ### M3 — Property settings + manual pricing/availability
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-- [ ] `PropertyModule` settings CRUD (name, address, check-in/out, max guests)
-- [ ] `PricingModule` — manual base rate, min-stay, cleaning fee
-- [ ] `BlockedDate` manual block CRUD with date-range picker in admin
-- [ ] `TaxModule` — calculation against seeded jurisdictions (1.5% state + 9% city)
-- [ ] `/api/v1/pricing/quote` returns breakdown matching `loging-tax-plan.md` §5.3 sample
-- [ ] **Unit tests** — `PropertyService`, `PricingService`, `TaxService` (every method + every error branch); `PricingQuoteRequest` schema in `packages/shared`
-- [ ] **E2E tests** — Property settings CRUD endpoints; pricing quote endpoint (happy path + min-stay violation + missing dates + 30-night exemption); blocked-date CRUD endpoints
-- [ ] **Admin component tests** — property settings form, blocked-dates picker
-- [ ] `pnpm test:all` green
+- [x] `PropertyModule` settings CRUD (name, address, check-in/out, max guests, pricing, cancellation policy)
+- [x] `PricingModule` — manual base rate + min-stay + cleaning fee → public `/api/v1/pricing/quote`
+- [x] `BlockedDate` manual block CRUD; admin date-range picker; OTA-imported blocks correctly read-only
+- [x] `TaxModule` — per-jurisdiction calculation (Oregon State 1.5% + Redmond City 9%) with 30-night exemption + Oregon round-down rule
+- [x] `/api/v1/pricing/quote` returns breakdown matching `loging-tax-plan.md` §5.3 (3 nights × $175 + $75 cleaning + tax = $663)
+- [x] **Unit tests** — `PropertyService` (6), `PricingService` (5), `TaxService` (8), `BlockedDateService` (8) — 27 unit tests added
+- [x] **E2E tests** — pricing quote (7), property GET/PATCH (6), blocked-date CRUD (7) — 20 e2e tests added
+- [x] **Admin component tests** — `PropertySettings` (3), `BlockedDates` (3) — 6 component tests added
+- [x] **Schema tests** — `Property` (21), `BlockedDate` (8) — 29 schema tests added
+- [x] `pnpm test:all` green (129 tests total)
 
-**Acceptance:** Admin can edit property, pricing, manual blocks; quote endpoint returns correct two-tax breakdown; full test suite green.
+**Acceptance:** all checklist items pass; smoke test confirms API serves both endpoints with correct payloads. Verified 2026-04-25.
+
+**Notes:**
+- CSRF protection extended to all non-GET `/api/v1/*` (was admin-only); booking inquiry / request endpoints will inherit this when they land in M6/M7.
+- `AuditLogEntry.action` enum extended with `property.update`, `blocked_date.create`, `blocked_date.delete`, plus forward-looking `booking.*` actions.
+- New TestClient methods (`patch`, `delete`) plus `enrollAdmin` + `signIn` helpers — used by every auth-gated e2e test from here on.
+- `PricingOverride` table exists in the schema but isn't wired up; per-date manual overrides + PriceLabs cache come in M3.10/M3.9 (Phase 3).
 
 ---
 

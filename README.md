@@ -156,7 +156,9 @@ Ports listed but not started by `pnpm dev`:
 2. Sign in as `admin@owlsnest.local` with any password ≥ 12 characters — the API detects the placeholder and redirects to `/setup`.
 3. On the setup page: confirm password, scan the QR code with any TOTP app (Google Authenticator, 1Password, Authy), enter the 6-digit code.
 4. Save the 10 recovery codes shown — they're only displayed once.
-5. You'll land on the dashboard.
+5. You'll land on the dashboard. From there you can:
+   - **Property settings** — name, address, check-in/out times, pricing, cancellation policy
+   - **Blocked dates** — owner stays, maintenance windows. OTA-imported blocks (from M4 onward) appear here read-only.
 
 To reset the admin (e.g. to re-run the setup flow):
 
@@ -172,6 +174,7 @@ PGPASSWORD=owlsnest psql -U owlsnest -h localhost -d owlsnest -c \
 | Command | Effect |
 |---|---|
 | `pnpm dev` | API + web + admin in parallel (watch mode) |
+| `pnpm dev:build-worker` | Start the Astro rebuild worker (requires Redis) |
 | `pnpm build` | Build all apps + packages |
 | `pnpm typecheck` | TypeScript check across the workspace |
 | `pnpm test` | Unit suites (shared + admin + api unit) — fast |
@@ -225,12 +228,14 @@ Production uses Docker Compose for `api` / `web` / `admin` / `build-worker` / `r
 |---|---|
 | M1 — Monorepo skeleton + Compose + Prisma schema | ✅ Complete |
 | M2 — Admin auth (login + TOTP + recovery + lockout) | ✅ Complete |
-| M3 — Property settings + manual pricing/availability + tax quote | ⬜ Next |
-| M4 — iCal export feed | ⬜ |
+| M3 — Property settings + manual pricing/availability + tax quote | ✅ Complete |
+| M4 — iCal export feed | ⬜ Next |
 | M5 — Public Astro site (Home/About/Gallery/Book/House Rules) | ⬜ |
 | M6 — Inquiry submission | ⬜ |
 | M7 — Request-to-book + Stripe Checkout | ⬜ |
 | M8 — Booking management actions | ⬜ |
+
+Total tests across the workspace: **146** (47 shared schema + 8 admin component + 57 API unit + 34 API e2e). Run `pnpm test:all` to verify.
 
 See `docs/BUILD-PLAN.md` for milestone detail.
 

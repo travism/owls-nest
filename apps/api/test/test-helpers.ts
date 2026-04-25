@@ -73,10 +73,9 @@ export class TestClient {
     const res = body ? await req.send(body) : await req.send();
     this.absorb(res.headers['set-cookie']);
     if (!retried && res.status === 403) {
-      const msg =
-        (res.body as any)?.error?.message ?? (res.body as any)?.message ?? '';
+      // ApiExceptionFilter normalizes csrf-csrf rejections to CSRF_INVALID
       const code = (res.body as any)?.error?.code;
-      if (code === 'EBADCSRFTOKEN' || /csrf/i.test(msg)) {
+      if (code === 'CSRF_INVALID') {
         await this.primeCsrf();
         return this.mutate(method, path, body, true);
       }

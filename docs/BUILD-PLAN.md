@@ -91,7 +91,7 @@ Verified 2026-04-25.
 
 **Carryovers:**
 - Real Redis on host (currently using MemoryStore — fine for dev, must use Compose Redis for prod). Revisit when infrastructure lands.
-- CSRF error envelope unification (csrf-csrf throws ForbiddenError caught by Nest's default filter as `{statusCode, message}`; SPA + e2e script handle this via lenient retry logic). A global exception filter mapping these to the standard `{error: {code, message}}` envelope is a small follow-up.
+- ~~CSRF error envelope unification.~~ Resolved 2026-04-25 via `ApiExceptionFilter` (`apps/api/src/common/api-exception.filter.ts`) — every error now uses `{error: {code, message, details?}}` shape; SPA and TestClient retry on `code === 'CSRF_INVALID'` only, no more regex fallbacks.
 
 **Tests:**
 - Unit: `apps/api/src/auth/password.service.spec.ts`, `totp.service.spec.ts`, `lockout.service.spec.ts` (18 tests).

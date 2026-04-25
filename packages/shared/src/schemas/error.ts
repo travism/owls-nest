@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
 export const ErrorCodeSchema = z.enum([
+  'BAD_REQUEST',
   'VALIDATION_FAILED',
   'UNAUTHENTICATED',
   'FORBIDDEN',
+  'CSRF_INVALID',
   'NOT_FOUND',
   'CONFLICT',
   'MFA_REQUIRED',

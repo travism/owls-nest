@@ -56,15 +56,13 @@ async function call<T>(
     credentials: 'include',
   });
 
-  // Auto-retry once on CSRF rejection (token may have rotated after session change)
+  // Auto-retry once on CSRF rejection (token may have rotated after session change).
+  // The API filter normalizes csrf-csrf's bare ForbiddenException into our envelope
+  // with code === 'CSRF_INVALID', so a clean code check is sufficient.
   if (isMutating && res.status === 403) {
     try {
-      const body = (await res.clone().json()) as Partial<ApiErrorBody> & { message?: string };
-      const code = body?.error?.code;
-      const msg = (body?.error?.message ?? body?.message ?? '') as string;
-      const looksCsrf =
-        code === 'EBADCSRFTOKEN' || code === 'CSRF_INVALID' || /csrf/i.test(msg);
-      if (looksCsrf) {
+      const body = (await res.clone().json()) as Partial<ApiErrorBody>;
+      if (body?.error?.code === 'CSRF_INVALID') {
         await fetchCsrfToken();
         headers.set('x-csrf-token', csrfToken!);
         res = await fetch(`${API_BASE}${path}`, {
@@ -75,7 +73,7 @@ async function call<T>(
         });
       }
     } catch {
-      // not JSON or no error code; fall through to error handling
+      // not JSON; fall through to error handling
     }
   }
 

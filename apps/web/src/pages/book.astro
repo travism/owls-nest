@@ -1,0 +1,23 @@
+---
+import Site from '../layouts/Site.astro';
+import { BookingCalendar } from '../components/BookingCalendar';
+import '../styles/booking-calendar.css';
+---
+
+<Site
+  title="Book your stay"
+  description="Check availability, see pricing, and start your reservation for The Owl's Nest."
+>
+  <section class="section">
+    <div class="container">
+      <h1>Book your stay</h1>
+      <p style="max-width: 60ch;">
+        Pick your check-in and check-out dates below. We'll show pricing including
+        Oregon and Redmond lodging tax. Booking is by request — we'll review your
+        dates and send a payment link.
+      </p>
+
+      <BookingCalendar client:visible />
+    </div>
+  </section>
+</Site>

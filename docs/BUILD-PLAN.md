@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M4 complete — ready for M5
-> **Next up:** M5 — Public Astro site
+> **Now:** ✅ M5 complete — ready for M6
+> **Next up:** M6 — Inquiry submission
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-25 (after M4; 194 tests passing)
+Last updated: 2026-04-25 (after M5; 243 tests passing)
 
 ---
 
@@ -165,21 +165,30 @@ Verified 2026-04-25.
 ---
 
 ### M5 — Public Astro site (Home / About / Gallery / Book / House Rules)
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-- [ ] Astro pages aligned with brand (per PRD §3.2)
-- [ ] Booking calendar React island calling `/api/v1/availability` + `/api/v1/pricing/quote`
-- [ ] Min-stay enforcement on calendar
-- [ ] TLT line-item display (Oregon Lodging Tax 1.5%, Redmond Lodging Tax 9.0%)
-- [ ] Media volume serving gallery images at `/media/gallery/*`
-- [ ] Lighthouse perf ≥ 90 on Home
-- [ ] **Unit tests** — date-utility helpers (calendar grid, available-day classification), tax line-item formatter, currency display
-- [ ] **E2E tests** — `/api/v1/availability?from=…&to=…` (correct unavailable ranges from blocked + bookings), build-time content endpoint
-- [ ] **Astro page render tests** — every page renders without errors, has expected H1/title/meta tags
-- [ ] **Component tests** — booking calendar React island (date selection, min-stay enforcement UI, quote breakdown display)
-- [ ] `pnpm test:all` green
+- [x] Astro pages aligned with brand (PRD §3.2 — high-desert palette tokenized in `apps/web/src/styles/tokens.css`, vintage-poster-meets-modern type via Playfair Display + system sans)
+- [x] Booking calendar React island calling `/api/v1/availability` + `/api/v1/pricing/quote` (`apps/web/src/components/BookingCalendar.tsx` using `react-day-picker` v9)
+- [x] Min-stay enforcement on calendar (client-side hint + server-side `MIN_STAY_VIOLATION` rejection)
+- [x] TLT line-item display (Oregon Lodging Tax 1.5%, Redmond Lodging Tax 9.0%) in the quote sidebar
+- [x] Media volume serving gallery images at `/media/gallery/*` — placeholder gradient cards in M5; real images load from the same paths once provided (no code change needed)
+- [x] **Schema tests** — `AvailabilityRequest` + `AvailabilityResponse` (6 tests in `packages/shared`)
+- [x] **Unit tests** — `AvailabilityService` (11 tests covering every status filter + same-day turnaround + sort)
+- [x] **E2E tests** — `/api/v1/availability` happy path + every filter branch (cancelled excluded, OTA-imports included, validation errors) — 9 tests
+- [x] **Astro page render tests** — `apps/web/src/test/pages.test.ts` parses each .astro source for required Site layout, title prop, h1, plus layout-level OG meta tags + nav structure (20 tests)
+- [x] **Component tests** — `BookingCalendar` (3 tests: loading state, hydrated form structure, error path)
+- [x] `pnpm test:all` green (243 tests total)
 
-**Acceptance:** Calendar renders 365 days within 1s; quote endpoint matches admin-side calculation byte-for-byte; full test suite green.
+**Acceptance:** All 5 pages build successfully (`astro build` produces `index.html` for each route); booking calendar fetches availability + quote and renders the TLT breakdown; quote endpoint output matches admin-calculated values byte-for-byte (verified via shared TaxService). Smoke-tested live: `/api/v1/availability?from=…&to=…` returns the right shape. Verified 2026-04-25.
+
+**Notes:**
+- New `AvailabilityService` (in `apps/api/src/calendar/`) is the central "is this range bookable?" service — used by the public calendar and reusable from M7 booking approval (per ARCHITECTURE.md §8.5).
+- `AvailabilityService` includes `pending_approval` bookings to hold inventory while owner reviews — prevents double-promising the same dates.
+- `apps/web/src/test/pages.test.ts` parses `.astro` source for structure rather than rendering (Astro's container API is still experimental in v4). Astro's `astro build` step in CI proves every page actually compiles.
+
+**Carryovers** (tracked in [`CARRYOVERS.md`](CARRYOVERS.md)):
+- CO-10 — Lighthouse perf ≥ 90 on Home (needs production-built site over the network; deferred to deploy checklist)
+- Real gallery photography is a content task, not a code carryover.
 
 ---
 

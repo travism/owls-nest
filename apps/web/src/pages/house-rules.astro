@@ -1,0 +1,74 @@
+---
+import Site from '../layouts/Site.astro';
+
+// Cancellation tiers shown for transparency. Could later be sourced
+// from /api/v1/property at build time so a single source of truth
+// drives both Stripe and this page.
+const cancellationTiers = [
+  { window: '30+ days before check-in', refund: 'Full refund' },
+  { window: '14–29 days before check-in', refund: '50% refund' },
+  { window: 'Less than 14 days before check-in', refund: 'No refund' },
+];
+
+const rules = [
+  'Up to 4 guests. No additional overnight visitors.',
+  'No smoking anywhere on the property.',
+  'No parties or events.',
+  'No pets at this time.',
+  "Quiet hours from 10pm — we're surrounded by neighbors.",
+  'Check-in 3:00 PM, check-out 11:00 AM.',
+  "Please leave the home tidy — we don't charge for normal use, but excessive cleaning may incur a fee.",
+];
+---
+
+<Site
+  title="House rules & policies"
+  description="Pre-booking transparency — house rules and cancellation policy for The Owl's Nest."
+>
+  <section class="section">
+    <div class="container" style="max-width: 720px;">
+      <h1>House rules & policies</h1>
+      <p>
+        Reading this before you book makes the rest of the experience smoother
+        for everyone. If anything is unclear, ask before booking — we're happy to
+        explain.
+      </p>
+
+      <h2>House rules</h2>
+      <ul class="rules-list">
+        {rules.map((r) => <li>{r}</li>)}
+      </ul>
+
+      <h2>Cancellation policy</h2>
+      <p>
+        We use a tiered cancellation policy applied automatically to direct
+        bookings:
+      </p>
+      <ul class="rules-list">
+        {cancellationTiers.map((t) => (
+          <li>
+            <strong>{t.window}</strong> — {t.refund}
+          </li>
+        ))}
+      </ul>
+      <p style="font-size: 0.9rem; color: var(--fg-muted);">
+        Refunds are processed automatically through Stripe within a few business
+        days of approval.
+      </p>
+
+      <h2>Damage and security</h2>
+      <p>
+        We don't charge a security deposit. Your card is held on file through
+        Stripe (you never share it with us directly) and is only charged for
+        documented damage beyond normal wear and tear.
+      </p>
+
+      <h2>Transient lodging tax</h2>
+      <p>
+        Oregon and Redmond both apply a transient lodging tax to short-term stays.
+        These show as separate line items at checkout and total 10.5% — 1.5% to
+        Oregon and 9% to the City of Redmond.
+      </p>
+    </div>
+  </section>
+</Site>

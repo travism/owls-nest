@@ -1,0 +1,81 @@
+---
+// Site-wide layout: header / nav / footer wrapping every page.
+import '../styles/tokens.css';
+import '../styles/site.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const { title, description, ogImage } = Astro.props;
+const siteTitle = title.endsWith("Owl's Nest") ? title : `${title} — The Owl's Nest`;
+const desc =
+  description ?? "A high-desert retreat in Redmond, Oregon. Direct booking, owner-operated.";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{siteTitle}</title>
+    <meta name="description" content={desc} />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content={siteTitle} />
+    <meta property="og:description" content={desc} />
+    <meta property="og:type" content="website" />
+    {ogImage && <meta property="og:image" content={ogImage} />}
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <a href="#main" class="skip-link">Skip to content</a>
+
+    <header class="site-header">
+      <div class="container site-header__inner">
+        <a href="/" class="brand">
+          <span class="brand__name">The Owl's Nest</span>
+          <span class="brand__sub">Redmond, Oregon</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary">
+          <a href="/about">About</a>
+          <a href="/gallery">Gallery</a>
+          <a href="/house-rules">House Rules</a>
+          <a href="/book" class="site-nav__cta">Book</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container site-footer__inner">
+        <p>
+          <strong>The Owl's Nest</strong>
+          <br />
+          147 SW 4th St, Redmond, OR 97756
+        </p>
+        <nav class="site-footer__nav" aria-label="Footer">
+          <a href="/about">About</a>
+          <a href="/gallery">Gallery</a>
+          <a href="/book">Book</a>
+          <a href="/house-rules">House Rules</a>
+        </nav>
+        <p class="site-footer__legal">
+          © {new Date().getFullYear()} The Owl's Nest. All rights reserved.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

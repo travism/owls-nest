@@ -1,0 +1,40 @@
+---
+import Site from '../layouts/Site.astro';
+
+// Placeholder gallery — real photos slot into /media/gallery/* via the
+// Compose `media` named volume (D-016). When images are added, swap each
+// gallery-card div for an <img> with src="/media/gallery/<filename>".
+const cards = [
+  { label: 'The front room', cls: 'gallery-card' },
+  { label: 'Kitchen', cls: 'gallery-card gallery-card--juniper' },
+  { label: 'Back patio at golden hour', cls: 'gallery-card gallery-card--dusk' },
+  { label: 'The owl loft', cls: 'gallery-card gallery-card--sand' },
+  { label: 'Bedroom one', cls: 'gallery-card gallery-card--juniper' },
+  { label: 'Bedroom two', cls: 'gallery-card' },
+];
+---
+
+<Site title="Gallery" description="Photos of The Owl's Nest in Redmond, Oregon.">
+  <section class="section">
+    <div class="container">
+      <h1>Gallery</h1>
+      <p style="max-width: 60ch;">
+        A small home built around natural light, considered design, and the
+        sound of the wind in the junipers.
+      </p>
+
+      <div class="gallery-grid" role="list">
+        {cards.map((c) => (
+          <div class={c.cls} role="listitem">
+            <span>{c.label}</span>
+          </div>
+        ))}
+      </div>
+
+      <p style="margin-top: 2rem; font-size: 0.85rem; color: var(--fg-muted);">
+        Photo placeholders shown above. Real imagery is loaded from the property's
+        media volume in production.
+      </p>
+    </div>
+  </section>
+</Site>

@@ -23,7 +23,9 @@ async function bootstrap() {
   const isProd = env.NODE_ENV === 'production';
 
   app.enableCors({
-    origin: isProd ? ['https://admin.owlsnest.com'] : ['http://localhost:5173'],
+    origin: isProd
+      ? ['https://owlsnest.com', 'https://www.owlsnest.com', 'https://admin.owlsnest.com']
+      : ['http://localhost:4321', 'http://localhost:5173'],
     credentials: true,
     exposedHeaders: ['x-csrf-token'],
   });

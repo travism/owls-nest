@@ -41,6 +41,13 @@ export async function createTestApp(): Promise<TestApp> {
   app.useLogger(app.get(PinoLogger));
   app.useGlobalFilters(new ApiExceptionFilter());
 
+  // Mirror the dev CORS allowlist from main.ts so e2e tests can assert it.
+  app.enableCors({
+    origin: ['http://localhost:4321', 'http://localhost:5173'],
+    credentials: true,
+    exposedHeaders: ['x-csrf-token'],
+  });
+
   // Mirror the production middleware stack (minus prod-only bits)
   app.use(cookieParser());
 

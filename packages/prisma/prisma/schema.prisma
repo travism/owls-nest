@@ -1,0 +1,540 @@
+// The Owl's Nest — Prisma schema
+// Mirrors ARCHITECTURE.md §4.2 entity list and field shapes from PRD §12,
+// loging-tax-plan.md §5.1, and calendar-sync-plan.md §4.2.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================================
+// PROPERTY
+// =====================================================================
+
+model Property {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  addressLine1    String
+  city            String
+  state           String   @db.VarChar(2)
+  postalCode      String
+  checkInTime     String   @db.VarChar(8)  // "15:00:00"
+  checkOutTime    String   @db.VarChar(8)
+  maxGuests       Int      @default(4)
+  baseNightlyRate Decimal  @db.Decimal(10, 2)
+  cleaningFee     Decimal  @db.Decimal(10, 2)
+  minStay         Int      @default(2)
+  cancellationPolicy Json  // tier thresholds + refund percentages
+
+  taxJurisdictions   TaxJurisdiction[]
+  bookings           Booking[]
+  blockedDates       BlockedDate[]
+  pricingOverrides   PricingOverride[]
+  pricingCacheEntries PricingCacheEntry[]
+  calendarSyncs      CalendarSync[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("property")
+}
+
+// =====================================================================
+// TAX (per loging-tax-plan.md §5.1, Option B)
+// =====================================================================
+
+model TaxJurisdiction {
+  id                    String    @id @default(uuid()) @db.Uuid
+  propertyId            String    @db.Uuid
+  property              Property  @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  jurisdictionName      String    // "Oregon State TLT", "City of Redmond TLT"
+  jurisdictionLevel     String    // 'state', 'city', 'county'
+  taxRate               Decimal   @db.Decimal(5, 4) // 0.0150 = 1.5%
+  adminFeeRate          Decimal?  @db.Decimal(5, 4) // 0.05 for state retention
+  filingFrequency       String    // 'monthly', 'quarterly'
+  filingAuthority       String?
+  filingPortalUrl       String?
+  exemptThresholdNights Int       @default(30)
+  effectiveFrom         DateTime  @default(now()) @db.Date
+  effectiveTo           DateTime? @db.Date
+  verifiedAt            DateTime  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId, effectiveTo])
+  @@map("tax_jurisdiction")
+}
+
+// =====================================================================
+// AUTH (admin)
+// =====================================================================
+
+model AdminUser {
+  id                  String   @id @default(uuid()) @db.Uuid
+  email               String   @unique
+  passwordHash        String
+  totpSecretEncrypted String?
+  totpEnrolledAt      DateTime?
+  recoveryCodesHashed String[] @default([])
+  failedAttempts      Int      @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+
+  auditLogEntries AuditLogEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_user")
+}
+
+// =====================================================================
+// GUEST
+// =====================================================================
+
+model Guest {
+  id    String  @id @default(uuid()) @db.Uuid
+  name  String
+  email String  @unique
+  phone String?
+
+  bookings   Booking[]
+  magicLinks MagicLinkToken[]
+  messages   Message[]
+
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("guest")
+}
+
+model MagicLinkToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  guestId     String    @db.Uuid
+  guest       Guest     @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique // SHA-256 of the URL token
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  ipRequested String?
+
+  createdAt DateTime @default(now())
+
+  @@index([guestId])
+  @@index([expiresAt])
+  @@map("magic_link_token")
+}
+
+// =====================================================================
+// INQUIRY
+// =====================================================================
+
+model Inquiry {
+  id                  String    @id @default(uuid()) @db.Uuid
+  name                String
+  email               String
+  phone               String?
+  checkIn             DateTime  @db.Date
+  checkOut            DateTime  @db.Date
+  message             String?
+  status              String    @default("new") // new | responded | converted | closed
+  convertedBookingId  String?   @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@map("inquiry")
+}
+
+// =====================================================================
+// BOOKING
+// =====================================================================
+
+model Booking {
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @db.Uuid
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  guestId     String?   @db.Uuid
+  guest       Guest?    @relation(fields: [guestId], references: [id], onDelete: SetNull)
+
+  checkIn     DateTime  @db.Date
+  checkOut    DateTime  @db.Date
+  numGuests   Int
+
+  status      String    // inquiry | pending_approval | approved | confirmed | cancelled | completed
+  source      String    @default("direct") // direct | airbnb | vrbo | booking_com | google
+
+  // Pricing
+  nightlyRate         Decimal  @db.Decimal(10, 2)
+  numNights           Int
+  subtotal            Decimal  @db.Decimal(10, 2)
+  cleaningFeeInternal Decimal  @db.Decimal(10, 2) @default(0)
+
+  // Tax (per loging-tax-plan.md §5.1)
+  stateTltAmount         Decimal @db.Decimal(10, 2) @default(0)
+  cityTltAmount          Decimal @db.Decimal(10, 2) @default(0)
+  totalTaxAmount         Decimal @db.Decimal(10, 2) @default(0)
+  stateAdminFeeRetained  Decimal @db.Decimal(10, 2) @default(0)
+  taxExempt              Boolean @default(false)
+  taxExemptReason        String?
+  otaRemittedState       Boolean @default(false)
+  otaRemittedCity        Boolean @default(false)
+
+  // Payment
+  stripePaymentIntentId String?
+  stripeCustomerId      String?
+  stripeFee             Decimal @db.Decimal(10, 2) @default(0)
+  netRevenue            Decimal @db.Decimal(10, 2) @default(0)
+
+  // Cancellation
+  cancellationTierApplied String?
+  refundAmount            Decimal? @db.Decimal(10, 2)
+  cancelledAt             DateTime?
+
+  messages             Message[]
+  turnoverAssignments  TurnoverAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, checkIn])
+  @@index([source])
+  @@index([guestId])
+  @@map("booking")
+}
+
+// =====================================================================
+// CLEANER
+// =====================================================================
+
+model Cleaner {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  phone        String
+  priorityRank Int
+  active       Boolean  @default(true)
+
+  portalTokens         CleanerToken[]
+  requestTokens        CleanerRequestToken[]
+  turnoverAssignments  TurnoverAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([priorityRank])
+  @@index([active, priorityRank])
+  @@map("cleaner")
+}
+
+model CleanerToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  cleanerId String    @db.Uuid
+  cleaner   Cleaner   @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique // SHA-256 of the portal URL token
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([cleanerId])
+  @@map("cleaner_token")
+}
+
+model CleanerRequestToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  cleanerId    String    @db.Uuid
+  cleaner      Cleaner   @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  assignmentId String    @db.Uuid
+  assignment   TurnoverAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  action       String    // 'accept' | 'decline'
+  expiresAt    DateTime
+  consumedAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([cleanerId])
+  @@index([assignmentId])
+  @@index([expiresAt])
+  @@map("cleaner_request_token")
+}
+
+model TurnoverAssignment {
+  id                  String   @id @default(uuid()) @db.Uuid
+  bookingId           String   @db.Uuid
+  booking             Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  cleanerId           String?  @db.Uuid
+  cleaner             Cleaner? @relation(fields: [cleanerId], references: [id], onDelete: SetNull)
+
+  date                DateTime @db.Date
+  checkOutTime        String   @db.VarChar(8)
+  checkInTime         String   @db.VarChar(8)
+  status              String   @default("unassigned") // unassigned | requested | assigned | completed
+  specialInstructions String?
+  requestHistory      Json     @default("[]") // [{cleaner_id, sent_at, responded_at, response}]
+  completedAt         DateTime?
+
+  requestTokens CleanerRequestToken[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([status])
+  @@map("turnover_assignment")
+}
+
+// =====================================================================
+// MESSAGING
+// =====================================================================
+
+model Message {
+  id           String   @id @default(uuid()) @db.Uuid
+  guestId      String?  @db.Uuid
+  guest        Guest?   @relation(fields: [guestId], references: [id], onDelete: SetNull)
+  bookingId    String?  @db.Uuid
+  booking      Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  direction    String   // 'inbound' | 'outbound'
+  body         String
+  templateId   String?  @db.Uuid
+  template     MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  twilioSid    String?  @unique
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([guestId, createdAt])
+  @@index([bookingId])
+  @@map("message")
+}
+
+model MessageTemplate {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  type       String   // 'confirmation' | 'pre_arrival' | 'post_stay' | 'admin_notification' | 'custom'
+  body       String
+  isDefault  Boolean  @default(false)
+  archivedAt DateTime?
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("message_template")
+}
+
+// =====================================================================
+// CONTENT
+// =====================================================================
+
+model BlogPost {
+  id                String    @id @default(uuid()) @db.Uuid
+  title             String
+  slug              String    @unique
+  body              String    // markdown
+  excerpt           String?
+  featuredImagePath String?   // path under /var/owlsnest/media/blog/
+  status            String    @default("draft") // draft | published
+  publishedAt       DateTime?
+  seoTitle          String?
+  seoDescription    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, publishedAt])
+  @@map("blog_post")
+}
+
+// =====================================================================
+// REVIEW
+// =====================================================================
+
+model Review {
+  id          String   @id @default(uuid()) @db.Uuid
+  guestName   String
+  platform    String   // 'direct' | 'airbnb' | 'vrbo' | 'booking_com'
+  rating      Int      // 1-5
+  body        String
+  bookingId   String?  @db.Uuid
+  visible     Boolean  @default(false)
+  reviewDate  DateTime @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([visible, reviewDate])
+  @@map("review")
+}
+
+// =====================================================================
+// CALENDAR (per calendar-sync-plan.md §4.2)
+// =====================================================================
+
+model CalendarSync {
+  id                  String    @id @default(uuid()) @db.Uuid
+  propertyId          String    @db.Uuid
+  property            Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  platform            String    // 'airbnb' | 'vrbo' | 'booking_com'
+  icalImportUrl       String
+  lastSyncedAt        DateTime?
+  lastSyncStatus      String    @default("pending") // 'success' | 'failed' | 'pending' | 'warning'
+  lastSyncError       String?
+  lastSyncEventCount  Int       @default(0)
+  syncIntervalMinutes Int       @default(30)
+  active              Boolean   @default(true)
+
+  blockedDates BlockedDate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+  @@map("calendar_sync")
+}
+
+model BlockedDate {
+  id              String        @id @default(uuid()) @db.Uuid
+  propertyId      String        @db.Uuid
+  property        Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  startDate       DateTime      @db.Date
+  endDate         DateTime      @db.Date // exclusive
+  reason          String        // 'manual_block' | 'maintenance' | 'ota_booking'
+  sourcePlatform  String?
+  sourceEventUid  String?
+  sourceSummary   String?
+  calendarSyncId  String?       @db.Uuid
+  calendarSync    CalendarSync? @relation(fields: [calendarSyncId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceEventUid, calendarSyncId])
+  @@index([startDate, endDate])
+  @@map("blocked_date")
+}
+
+// =====================================================================
+// PRICING
+// =====================================================================
+
+model PricingOverride {
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @db.Uuid
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date
+  nightlyRate     Decimal  @db.Decimal(10, 2)
+  minStayOverride Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyId, date])
+  @@map("pricing_override")
+}
+
+model PricingCacheEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  date        DateTime @db.Date
+  nightlyRate Decimal  @db.Decimal(10, 2)
+  minStay     Int      @default(1)
+  source      String   @default("pricelabs") // 'pricelabs' | 'manual' | 'fallback'
+  fetchedAt   DateTime @default(now())
+
+  @@unique([propertyId, date])
+  @@index([fetchedAt])
+  @@map("pricing_cache_entry")
+}
+
+// =====================================================================
+// PROMO (deferred — schema only)
+// =====================================================================
+
+model PromoCode {
+  id            String    @id @default(uuid()) @db.Uuid
+  code          String    @unique
+  discountType  String    // 'percentage' | 'fixed'
+  discountValue Decimal   @db.Decimal(10, 2)
+  validFrom     DateTime  @db.Date
+  validTo       DateTime? @db.Date
+  maxUses       Int?
+  currentUses   Int       @default(0)
+  active        Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("promo_code")
+}
+
+// =====================================================================
+// AUDIT (per ARCHITECTURE.md §12.4)
+// =====================================================================
+
+model AuditLogEntry {
+  id           String     @id @default(uuid()) @db.Uuid
+  adminUserId  String?    @db.Uuid
+  adminUser    AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  action       String     // 'booking.approve', 'booking.refund', 'auth.login.success', etc.
+  targetType   String?    // 'booking', 'guest', 'cleaner', 'admin_user'
+  targetId     String?
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_log_entry")
+}
+
+// =====================================================================
+// WEBHOOK IDEMPOTENCY (per ARCHITECTURE.md §13.2)
+// =====================================================================
+
+model WebhookEvent {
+  id          String   @id // provider-supplied event id (Stripe event.id, Twilio MessageSid)
+  provider    String   // 'stripe' | 'twilio' | 'mailersend'
+  eventType   String?
+  payload     Json?
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([provider, createdAt])
+  @@map("webhook_event")
+}
+
+// =====================================================================
+// OUTBOX (per ARCHITECTURE.md §7.3)
+// =====================================================================
+
+model Outbox {
+  id          String    @id @default(uuid()) @db.Uuid
+  jobName     String    // BullMQ queue name
+  payload     Json
+  idempotencyKey String? @unique
+  enqueuedAt  DateTime?
+  failedAt    DateTime?
+  failureReason String?
+  attempts    Int       @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([enqueuedAt])
+  @@map("outbox")
+}

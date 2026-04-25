@@ -1,0 +1,32 @@
+# ----- builder -----
+FROM node:20-alpine AS builder
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+WORKDIR /repo
+
+COPY pnpm-workspace.yaml package.json tsconfig.base.json .npmrc ./
+COPY packages/prisma/package.json packages/prisma/
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+
+RUN pnpm install --frozen-lockfile=false
+
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+
+RUN pnpm --filter @owlsnest/prisma run generate
+RUN pnpm --filter @owlsnest/shared run build
+RUN pnpm --filter @owlsnest/api run build
+
+RUN pnpm deploy --filter @owlsnest/api --prod /deploy
+
+# ----- runtime -----
+FROM node:20-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=builder /deploy/node_modules ./node_modules
+COPY --from=builder /repo/apps/api/dist ./dist
+COPY --from=builder /repo/packages/prisma/prisma ./prisma
+
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

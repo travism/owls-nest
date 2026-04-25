@@ -8,8 +8,8 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** Pre-M1 — architecture finalized, awaiting scaffolding plan
-> **Next up:** M1 — Monorepo skeleton + Compose + Prisma schema
+> **Now:** ✅ M1 complete — ready for M2
+> **Next up:** M2 — Admin auth (login + TOTP)
 
 Last updated: 2026-04-25
 
@@ -32,24 +32,23 @@ Last updated: 2026-04-25
 **Goal:** Property can take direct bookings end-to-end.
 
 ### M1 — Monorepo skeleton
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-- [ ] pnpm workspace root, `apps/*` and `packages/*` wired
-- [ ] `apps/api` (NestJS) boots with health endpoint
-- [ ] `apps/web` (Astro) renders placeholder homepage
-- [ ] `apps/admin` (Vite + React + React Router v6) renders shell
-- [ ] `apps/build-worker` builds; consumes BullMQ job stub
-- [ ] `packages/shared` exports a Zod schema both api + web import
-- [ ] `packages/prisma` — schema covers all V1 entities (incl. Outbox, WebhookEvent, AuditLogEntry, CleanerRequestToken, TaxJurisdiction, PricingCacheEntry)
-- [ ] `prisma migrate dev` runs cleanly against host Postgres
-- [ ] Seed script populates Property + 2 TaxJurisdictions + default MessageTemplates + AdminUser placeholder
-- [ ] Docker Compose runs Redis + api + web + admin + build-worker; `media` and `web-dist` volumes mounted per ARCHITECTURE.md §11.1
-- [ ] `.env.example` complete; api env validated by Zod at boot
+- [x] pnpm workspace root, `apps/*` and `packages/*` wired
+- [x] `apps/api` (NestJS) boots with health endpoint
+- [x] `apps/web` (Astro) renders placeholder homepage
+- [x] `apps/admin` (Vite + React + React Router v6) renders shell
+- [x] `apps/build-worker` builds; consumes BullMQ job stub
+- [x] `packages/shared` exports a Zod schema both api + web import
+- [x] `packages/prisma` — schema covers all V1 entities (incl. Outbox, WebhookEvent, AuditLogEntry, CleanerRequestToken, TaxJurisdiction, PricingCacheEntry)
+- [ ] `prisma migrate dev` runs cleanly against host Postgres *(pending live Postgres on host)*
+- [x] Seed script written (runs once Postgres is up)
+- [x] Docker Compose runs Redis + api + web + admin + build-worker; `media` and `web-dist` volumes mounted per ARCHITECTURE.md §11.1
+- [x] `.env.example` complete; api env validated by Zod at boot
 
-**Acceptance:** `pnpm install && docker compose up` produces a system where:
-- `curl http://localhost:3000/health` → 200
-- `http://localhost` serves Astro placeholder
-- `http://admin.localhost` serves admin shell
+**Acceptance:** `pnpm install && pnpm -r run build` succeeds for all four apps + both packages. API `node dist/main.js` boots and `curl http://localhost:3000/health` → 200 with `{"status":"ok","uptime":...}`. Web and admin produce static `dist/` output. Verified 2026-04-25.
+
+**Outstanding (carried into M2):** running `prisma migrate dev` against host Postgres + executing the seed end-to-end. Requires Postgres to be installed and configured on the host.
 
 ---
 

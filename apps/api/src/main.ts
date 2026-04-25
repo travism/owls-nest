@@ -84,13 +84,23 @@ async function bootstrap() {
     }
     next();
   });
-  // Apply CSRF protection to all non-GET /api/v1 routes. Webhooks live
-  // outside /api/v1 (under /webhooks/*) and verify provider signatures
-  // instead, so they're not subject to CSRF.
+  // Apply CSRF protection to non-GET /api/v1 routes EXCEPT for public
+  // endpoints that don't read a session cookie. Without an ambient
+  // credential there's nothing for CSRF to protect — and we'd just block
+  // legitimate form submits from the public site. CORS + Origin checking
+  // is what guards public POSTs.
+  //
+  // Webhooks live outside /api/v1 (under /webhooks/*) and verify provider
+  // signatures instead.
+  const PUBLIC_NON_GET_PATHS: RegExp[] = [
+    /^\/api\/v1\/inquiries$/, // POST — anonymous inquiry submission
+    // M7 will add: /^\/api\/v1\/bookings$/ for guest booking requests
+  ];
   app.use((req: Request, res: Response, next: NextFunction) => {
     const protectedPath = req.path.startsWith('/api/v1');
     const safeMethod = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
-    if (!protectedPath || safeMethod) return next();
+    const isPublic = PUBLIC_NON_GET_PATHS.some((re) => re.test(req.path));
+    if (!protectedPath || safeMethod || isPublic) return next();
     csrf.doubleCsrfProtection(req, res, next);
   });
 

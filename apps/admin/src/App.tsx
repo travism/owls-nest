@@ -7,6 +7,7 @@ import { SetupPage } from './pages/Setup';
 import { DashboardPage } from './pages/Dashboard';
 import { PropertySettingsPage } from './pages/PropertySettings';
 import { BlockedDatesPage } from './pages/BlockedDates';
+import { InquiriesPage } from './pages/Inquiries';
 
 export function App() {
   return (
@@ -36,6 +37,14 @@ export function App() {
         element={
           <AuthBoundary>
             <BlockedDatesPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/inquiries"
+        element={
+          <AuthBoundary>
+            <InquiriesPage />
           </AuthBoundary>
         }
       />

@@ -25,6 +25,12 @@ export function DashboardPage() {
       <h2>Manage</h2>
       <ul style={{ listStyle: 'none', padding: 0 }}>
         <li style={{ padding: '0.5rem 0' }}>
+          <Link to="/inquiries">Inquiries</Link>
+          <span className="muted" style={{ marginLeft: '0.5rem' }}>
+            — guest dates + questions submitted from the public site
+          </span>
+        </li>
+        <li style={{ padding: '0.5rem 0' }}>
           <Link to="/property">Property settings</Link>
           <span className="muted" style={{ marginLeft: '0.5rem' }}>
             — name, address, pricing, cancellation policy

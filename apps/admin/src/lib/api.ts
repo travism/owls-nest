@@ -157,3 +157,34 @@ export const blockedDatesApi = {
     api.post<BlockedDate>('/api/v1/blocked-dates', body),
   remove: (id: string) => api.delete<{ ok: true }>(`/api/v1/blocked-dates/${id}`),
 };
+
+// ----- Inquiries -----
+
+export type InquiryStatus = 'new' | 'responded' | 'converted' | 'closed';
+export interface AdminInquiry {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  checkIn: string;
+  checkOut: string;
+  message: string | null;
+  status: InquiryStatus;
+  convertedBookingId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const inquiriesApi = {
+  list: (status?: InquiryStatus) =>
+    api.get<AdminInquiry[]>(
+      status
+        ? `/api/v1/admin/inquiries?status=${status}`
+        : '/api/v1/admin/inquiries',
+    ),
+  get: (id: string) => api.get<AdminInquiry>(`/api/v1/admin/inquiries/${id}`),
+  transition: (id: string, status: 'responded' | 'closed') =>
+    api.post<AdminInquiry>(`/api/v1/admin/inquiries/${id}/transition`, { status }),
+  convert: (id: string) =>
+    api.post<AdminInquiry>(`/api/v1/admin/inquiries/${id}/convert`),
+};

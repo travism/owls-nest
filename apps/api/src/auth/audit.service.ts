@@ -18,6 +18,9 @@ export type AuditAction =
   // Blocked dates
   | 'blocked_date.create'
   | 'blocked_date.delete'
+  // Inquiries
+  | 'inquiry.transition'
+  | 'inquiry.convert'
   // Booking lifecycle (forward-looking; used in M7/M8)
   | 'booking.approve'
   | 'booking.decline'

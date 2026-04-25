@@ -1,7 +1,9 @@
 ---
 import Site from '../layouts/Site.astro';
 import { BookingCalendar } from '../components/BookingCalendar';
+import { InquiryForm } from '../components/InquiryForm';
 import '../styles/booking-calendar.css';
+import '../styles/inquiry-form.css';
 ---
 
 <Site
@@ -18,6 +20,10 @@ import '../styles/booking-calendar.css';
       </p>
 
       <BookingCalendar client:visible />
+
+      <div style="max-width: 720px; margin: 0 auto;">
+        <InquiryForm client:visible />
+      </div>
     </div>
   </section>
 </Site>

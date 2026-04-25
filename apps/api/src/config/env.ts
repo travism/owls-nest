@@ -30,7 +30,14 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export function loadEnv(): Env {
-  const parsed = EnvSchema.safeParse(process.env);
+  // Treat empty strings as missing — `.env` files commonly have placeholder
+  // empty values like `STRIPE_SECRET_KEY=`, which would otherwise fail
+  // .optional() schemas with min length / email constraints.
+  const cleaned: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    cleaned[key] = value === '' ? undefined : value;
+  }
+  const parsed = EnvSchema.safeParse(cleaned);
   if (!parsed.success) {
     console.error('Invalid environment variables:');
     console.error(parsed.error.flatten().fieldErrors);

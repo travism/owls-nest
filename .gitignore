@@ -54,3 +54,6 @@ nginx/certbot-webroot/
 # AI
 .claude
 
+# Astro generated metadata
+.astro/
+

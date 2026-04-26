@@ -172,6 +172,87 @@ export class FakeStripeAdapter implements StripeAdapter {
     };
   }
 
+  /** Build a charge.dispute.created event (M9). */
+  buildDisputeCreatedEvent(
+    paymentIntentId: string,
+    reason: string,
+    amountCents = 50000,
+  ): { id: string; type: 'charge.dispute.created'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.dispute.created',
+      data: {
+        object: {
+          id: this.id('dp_test'),
+          object: 'dispute',
+          payment_intent: paymentIntentId,
+          reason,
+          amount: amountCents,
+          status: 'needs_response',
+        },
+      },
+    };
+  }
+
+  /** Build a charge.dispute.closed event (M9). */
+  buildDisputeClosedEvent(
+    paymentIntentId: string,
+    status: 'won' | 'lost' | 'warning_closed' = 'won',
+  ): { id: string; type: 'charge.dispute.closed'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.dispute.closed',
+      data: {
+        object: {
+          id: this.id('dp_test'),
+          object: 'dispute',
+          payment_intent: paymentIntentId,
+          status,
+        },
+      },
+    };
+  }
+
+  /** Build a charge.refunded event (M9). amountRefundedCents is the running total. */
+  buildChargeRefundedEvent(
+    paymentIntentId: string,
+    amountRefundedCents: number,
+    fullyRefunded = false,
+  ): { id: string; type: 'charge.refunded'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: this.id('ch_test'),
+          object: 'charge',
+          payment_intent: paymentIntentId,
+          amount_refunded: amountRefundedCents,
+          refunded: fullyRefunded,
+        },
+      },
+    };
+  }
+
+  /** Build a payment_intent.payment_failed event (M9). */
+  buildPaymentFailedEvent(
+    paymentIntentId: string,
+    reason = 'card_declined',
+  ): { id: string; type: 'payment_intent.payment_failed'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'payment_intent.payment_failed',
+      data: {
+        object: {
+          id: paymentIntentId,
+          object: 'payment_intent',
+          status: 'requires_payment_method',
+          last_payment_error: { message: reason },
+        },
+      },
+    };
+  }
+
   /**
    * Build a checkout.session.completed event in the shape Stripe sends.
    */

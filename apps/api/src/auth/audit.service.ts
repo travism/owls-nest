@@ -34,7 +34,12 @@ export type AuditAction =
   // Payment + webhook
   | 'booking_charge.created'
   | 'booking_charge.succeeded'
-  | 'webhook.stripe.processed';
+  | 'webhook.stripe.processed'
+  // M9: Stripe dispute / refund / failure events (handled in StripeWebhookController)
+  | 'webhook.stripe.dispute_created'
+  | 'webhook.stripe.dispute_closed'
+  | 'webhook.stripe.refunded'
+  | 'webhook.stripe.payment_failed';
 
 @Injectable()
 export class AuditService {

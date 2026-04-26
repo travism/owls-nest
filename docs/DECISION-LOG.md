@@ -344,4 +344,66 @@ If we shipped M7 with a single-payment design, every one of these would later re
 
 ---
 
+## D-021 — Email infrastructure: MailHog dev / MailerSend prod / templates rendered as code
+
+- **Date:** 2026-04-26
+- **Status:** Accepted (refines D-001 and D-018)
+
+**Decision:**
+
+1. **Local development uses MailHog**, run as a Compose service exposing SMTP on `:1025` and a web UI on `:8025`. The API talks to it via `nodemailer` SMTP.
+2. **Production uses MailerSend** (D-001 stands as the prod provider choice).
+3. **Tests use a `FakeEmailAdapter`** that records messages in-memory — same pattern as `FakeStripeAdapter`.
+4. **Transactional templates live in `apps/api/src/integrations/email/templates/` as TypeScript functions** returning `{ subject, html, text }`. Variable interpolation is plain string templates — no Handlebars/Mustache. Templates are not stored in the provider's dashboard.
+
+**Alternatives considered:**
+
+- A. MailerSend's hosted templates (referenced by template ID per D-001's original consequence). Rejected: dev/prod parity, accidental drift between dashboard edits and code, harder to test deterministically, and no preview path in dev without burning real sends.
+- B. SES + react-email or mjml for rendering. Rejected: more moving parts than a small property needs.
+- C. Run MailHog only when the contributor opts in. Rejected: it's ~30MB, starts in seconds, and the cost-of-confusion when an inquiry email "doesn't arrive" is much higher than the disk cost.
+
+**Rationale:** Treat email like any other piece of code — versioned, code-reviewed, deterministically tested. Same payload renders to MailHog locally and MailerSend in prod, so what the owner saw in development is byte-identical to what the guest receives. Zero provider lock-in for the rendered output; MailerSend just becomes a delivery surface.
+
+**Consequences:**
+
+- New service: `mailhog` in `docker/docker-compose.yml`, ports `1025`/`8025`. API depends on it.
+- New env vars: `EMAIL_PROVIDER` (`mailhog | mailersend | fake`), `EMAIL_FROM`, `MAILHOG_HOST`, `MAILHOG_PORT`, `ADMIN_NOTIFICATION_EMAIL`. `EmailModule` resolves the adapter at boot; production hard-fails if `EMAIL_PROVIDER !== 'mailersend'`.
+- New deps in `apps/api`: `nodemailer`, `@types/nodemailer`, `mailersend`, `@nestjs/schedule`, `bullmq`.
+- D-001's "templates managed in MailerSend dashboard" consequence is **superseded** — templates live in code now. The MailerSend account is still required for deliverability/SPF/DKIM/DMARC.
+
+**Reference:** `apps/api/src/integrations/email/`. Adapter pattern mirrors `apps/api/src/integrations/stripe/`.
+
+---
+
+## D-022 — Outbox drain runs in-process; only `rebuild-site` goes to BullMQ
+
+- **Date:** 2026-04-26
+- **Status:** Accepted (refines D-002 and D-019)
+
+**Decision:** The transactional Outbox drain runs **inside the API process** as a `@nestjs/schedule` cron (every 10 seconds; configurable). It:
+
+- Reads `Outbox` rows where `enqueuedAt IS NULL` and `attempts < 5`.
+- For `guest-notification` and `admin-notification` rows: renders the matching template (per `payload.event`) and calls the email adapter directly.
+- For `rebuild-site` rows: enqueues a BullMQ job into the existing `rebuild-site` queue, which the long-running `apps/build-worker` consumes (D-005).
+- Stamps `enqueuedAt` on success; increments `attempts` + records `failureReason` on error.
+
+**Alternatives considered:**
+
+- A. Stand up a second worker (`apps/outbox-worker`) and route everything through BullMQ. Rejected: another container, another set of credentials, another health check — for jobs that are millisecond-scale (a single SMTP send).
+- B. Keep `setInterval` polling rather than `@nestjs/schedule`. Rejected: schedule's cron decorator is just clearer at the call site.
+- C. Use a Postgres `LISTEN/NOTIFY` trigger to push rows into BullMQ. Rejected: works fine, but the rebuild-site path *does* need BullMQ for retry/backoff/concurrency, and email path doesn't — splitting the two by jobName is simpler than unifying through Redis.
+
+**Rationale:** Email sends are short, idempotent, and best handled where the data already lives. Astro builds are minutes-long, need retries and a separate process pool, and already have a worker (D-005). Use BullMQ where it earns its keep; skip it where it doesn't. D-002's "all side-effecting workflows go through queues" gets a refinement: the *transactional outbox* is the queue for short jobs; the BullMQ queue is for long jobs.
+
+**Consequences:**
+
+- New module `apps/api/src/outbox/`: `OutboxDrainService` + `OutboxModule`. Tests can call `tick()` synchronously; cron is disabled in `NODE_ENV=test`.
+- The `outbox-drain` queue mentioned in D-019's consequence isn't a real BullMQ queue — only the `rebuild-site` queue is.
+- Idempotency: `Outbox.idempotencyKey` flows through to (a) the email adapter as `X-Idempotency-Key` (MailerSend honors it; MailHog ignores), and (b) BullMQ as `jobId` for rebuild-site (BullMQ rejects duplicate ids).
+- New deps `@nestjs/schedule` and `bullmq` in `apps/api`.
+
+**Reference:** `apps/api/src/outbox/outbox-drain.service.ts`. Cross-references D-001, D-002, D-005, D-019.
+
+---
+
 *New decisions append to the bottom with the next sequential `D-NNN`. Mark superseded decisions as `Status: Superseded by D-NNN` rather than editing in place.*

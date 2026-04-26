@@ -122,11 +122,15 @@ describe('InquiryService', () => {
     expect(result.checkIn).toBe('2026-07-15');
     expect(result.checkOut).toBe('2026-07-18');
 
-    expect(prisma.outbox()).toHaveLength(1);
-    const out = prisma.outbox()[0];
-    expect(out.jobName).toBe('admin-notification');
-    expect(out.idempotencyKey).toMatch(/^inquiry\.new:/);
-    expect(out.payload).toMatchObject({ event: 'inquiry.new' });
+    // M9: each inquiry creates an admin notification + a guest acknowledgement.
+    expect(prisma.outbox()).toHaveLength(2);
+    const admin = prisma.outbox().find((o: any) => o.jobName === 'admin-notification');
+    expect(admin).toBeTruthy();
+    expect(admin.idempotencyKey).toMatch(/^inquiry\.new:/);
+    expect(admin.payload).toMatchObject({ event: 'inquiry.new' });
+    const guest = prisma.outbox().find((o: any) => o.jobName === 'guest-notification');
+    expect(guest).toBeTruthy();
+    expect(guest.payload).toMatchObject({ event: 'inquiry.acknowledged' });
   });
 
   it('serializes phone and message as null when not provided', async () => {

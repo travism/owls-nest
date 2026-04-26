@@ -326,6 +326,11 @@ export class BookingService {
             checkoutUrl: session.url,
             guestEmail: booking.guest!.email,
             guestPhone: booking.guest!.phone,
+            guestName: booking.guest!.name,
+            checkIn: toISODate(booking.checkIn),
+            checkOut: toISODate(booking.checkOut),
+            amount: Number(booking.subtotal) + Number(booking.totalTaxAmount),
+            currency: 'usd',
           } as unknown as Prisma.InputJsonValue,
           idempotencyKey: `booking.approved:${booking.id}:${charge.id}`,
         },
@@ -360,7 +365,7 @@ export class BookingService {
   }): Promise<{ chargeId: string; bookingId: string } | null> {
     const charge = await this.prisma.bookingCharge.findUnique({
       where: { stripeCheckoutSessionId: params.sessionId },
-      include: { booking: true },
+      include: { booking: { include: { guest: true } } },
     });
     if (!charge) return null;
     if (charge.status === 'succeeded') {
@@ -408,6 +413,9 @@ export class BookingService {
             event: 'booking.confirmed',
             bookingId: charge.bookingId,
             chargeId: charge.id,
+            guestName: charge.booking?.guest?.name ?? null,
+            guestEmail: charge.booking?.guest?.email ?? null,
+            amount: Number(charge.amount),
           } as unknown as Prisma.InputJsonValue,
           idempotencyKey: `booking.confirmed:${charge.id}`,
         },

@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { InquiryCreateSchema } from '@owlsnest/shared';
 import { z } from 'zod';
@@ -38,6 +39,16 @@ export class PublicInquiryController {
   constructor(private readonly inquiry: InquiryService) {}
 
   @Post()
+  // Stricter rate limit on this public POST — every inquiry costs us
+  // a DB row + an Outbox row. CO-11 / arch §12.3. The TEST_MULTIPLIER
+  // in throttler.module.ts bumps this 100x in NODE_ENV=test so other
+  // tests don't trip it; rate-limit.e2e-spec.ts exercises the real path.
+  @Throttle({
+    default: {
+      limit: 5 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+      ttl: 60_000,
+    },
+  })
   async create(
     @Body(new ZodValidationPipe(InquiryCreateSchema))
     body: z.infer<typeof InquiryCreateSchema>,

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,6 +12,7 @@ import { PropertyModule } from './property/property.module';
 import { BlockedDateModule } from './blocked-date/blocked-date.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { InquiryModule } from './inquiry/inquiry.module';
+import { AppThrottlerModule } from './throttler/throttler.module';
 
 @Module({
   imports: [
@@ -23,6 +26,7 @@ import { InquiryModule } from './inquiry/inquiry.module';
         customProps: () => ({ service: 'api' }),
       },
     }),
+    AppThrottlerModule,
     PrismaModule,
     RedisModule,
     HealthModule,
@@ -33,6 +37,11 @@ import { InquiryModule } from './inquiry/inquiry.module';
     BlockedDateModule,
     CalendarModule,
     InquiryModule,
+  ],
+  providers: [
+    // Apply ThrottlerGuard globally — uses the 'default' bucket (100/min/IP)
+    // unless a route opts into a stricter named bucket via @Throttle().
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

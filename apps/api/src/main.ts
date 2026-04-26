@@ -5,7 +5,7 @@ import { Logger } from '@nestjs/common';
 import session from 'express-session';
 import { RedisStore } from 'connect-redis';
 import cookieParser from 'cookie-parser';
-import type { Request, Response, NextFunction } from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import { AppModule } from './app.module';
 import { loadEnv } from './config/env';
 import { RedisService } from './redis/redis.service';
@@ -31,6 +31,19 @@ async function bootstrap() {
   });
 
   if (isProd) (app.getHttpAdapter().getInstance() as any).set('trust proxy', 1);
+
+  // Stripe webhook needs the raw request body for signature verification.
+  // Mount express.raw() FIRST so the global JSON parser (later in the
+  // pipeline) doesn't consume the body. Stash the buffer on req.rawBody
+  // so the controller can pass it to constructWebhookEvent.
+  app.use(
+    '/webhooks/stripe',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+    (req: Request, _res: Response, next: NextFunction) => {
+      (req as any).rawBody = req.body;
+      next();
+    },
+  );
 
   app.use(cookieParser());
 
@@ -93,8 +106,9 @@ async function bootstrap() {
   // Webhooks live outside /api/v1 (under /webhooks/*) and verify provider
   // signatures instead.
   const PUBLIC_NON_GET_PATHS: RegExp[] = [
-    /^\/api\/v1\/inquiries$/, // POST — anonymous inquiry submission
-    // M7 will add: /^\/api\/v1\/bookings$/ for guest booking requests
+    /^\/api\/v1\/inquiries$/, // POST — anonymous inquiry submission (M6)
+    // Future: /^\/api\/v1\/bookings$/ when self-serve guest booking lands
+    //         alongside magic-link auth (M3.7).
   ];
   app.use((req: Request, res: Response, next: NextFunction) => {
     const protectedPath = req.path.startsWith('/api/v1');

@@ -175,6 +175,65 @@ export interface AdminInquiry {
   updatedAt: string;
 }
 
+// ----- Bookings -----
+
+export type BookingStatus =
+  | 'inquiry'
+  | 'pending_approval'
+  | 'approved'
+  | 'confirmed'
+  | 'cancelled'
+  | 'completed';
+
+export interface AdminBookingCharge {
+  id: string;
+  kind: string;
+  amount: number;
+  status: string;
+  stripeCheckoutSessionId: string | null;
+  stripePaymentIntentId: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface AdminBooking {
+  id: string;
+  status: BookingStatus;
+  source: string;
+  guestId: string | null;
+  guest: { id: string; name: string; email: string; phone: string | null } | null;
+  checkIn: string;
+  checkOut: string;
+  numNights: number;
+  numGuests: number;
+  nightlyRate: number;
+  subtotal: number;
+  totalTaxAmount: number;
+  totalWithTax: number;
+  stripeCustomerId: string | null;
+  charges: AdminBookingCharge[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApprovalResponse {
+  booking: AdminBooking;
+  checkoutUrl: string;
+  chargeId: string;
+}
+
+export const bookingsApi = {
+  list: (status?: BookingStatus) =>
+    api.get<AdminBooking[]>(
+      status
+        ? `/api/v1/admin/bookings?status=${status}`
+        : '/api/v1/admin/bookings',
+    ),
+  get: (id: string) => api.get<AdminBooking>(`/api/v1/admin/bookings/${id}`),
+  approve: (id: string) =>
+    api.post<ApprovalResponse>(`/api/v1/admin/bookings/${id}/approve`),
+};
+
 export const inquiriesApi = {
   list: (status?: InquiryStatus) =>
     api.get<AdminInquiry[]>(

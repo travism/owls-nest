@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M6 complete — ready for M7
-> **Next up:** M7 — Request-to-book + Stripe Checkout
+> **Now:** ✅ M7 complete — ready for M8
+> **Next up:** M8 — Booking management actions (incl. ad-hoc charges + extensions)
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-25 (after M6; 281 tests passing)
+Last updated: 2026-04-26 (after M7; 316 tests passing)
 
 ---
 
@@ -216,7 +216,7 @@ Verified 2026-04-25.
 ---
 
 ### M7 — Request-to-book + Stripe Checkout
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
 - [ ] `BookingModule` request → `pending_approval` state
 - [ ] Admin approval action: creates a `BookingCharge` of `kind='initial'` (D-020), opens a Stripe Checkout Session against it, sends the payment link via SMS + email

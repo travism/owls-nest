@@ -7,7 +7,7 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import session from 'express-session';
 import cookieParser from 'cookie-parser';
-import type { Request, Response, NextFunction } from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module';
 import { RedisService } from '../src/redis/redis.service';
@@ -49,6 +49,17 @@ export async function createTestApp(): Promise<TestApp> {
   });
 
   // Mirror the production middleware stack (minus prod-only bits)
+  // Stripe webhook needs raw body for signature verification — same as
+  // production main.ts. Mounted before the JSON parser so the raw bytes
+  // survive into req.rawBody.
+  app.use(
+    '/webhooks/stripe',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+    (req: Request, _res: Response, next: NextFunction) => {
+      (req as any).rawBody = req.body;
+      next();
+    },
+  );
   app.use(cookieParser());
 
   const redisService = app.get(RedisService);

@@ -190,17 +190,18 @@ model Booking {
   otaRemittedState      Boolean @default(false) @map("ota_remitted_state")
   otaRemittedCity       Boolean @default(false) @map("ota_remitted_city")
 
-  // Payment
-  stripePaymentIntentId String? @map("stripe_payment_intent_id")
-  stripeCustomerId      String? @map("stripe_customer_id")
-  stripeFee             Decimal @db.Decimal(10, 2) @default(0) @map("stripe_fee")
-  netRevenue            Decimal @db.Decimal(10, 2) @default(0) @map("net_revenue")
+  // Payment — see BookingCharge for individual transactions.
+  // stripeCustomerId stays here because it's reusable across charges
+  // (initial deposit + extension charges + damage charges, etc.).
+  stripeCustomerId String? @map("stripe_customer_id")
+  netRevenue       Decimal @db.Decimal(10, 2) @default(0) @map("net_revenue")
 
   // Cancellation
   cancellationTierApplied String?   @map("cancellation_tier_applied")
   refundAmount            Decimal?  @db.Decimal(10, 2) @map("refund_amount")
   cancelledAt             DateTime? @map("cancelled_at")
 
+  charges             BookingCharge[]
   messages            Message[]
   turnoverAssignments TurnoverAssignment[]
 
@@ -211,6 +212,42 @@ model Booking {
   @@index([source])
   @@index([guestId])
   @@map("booking")
+}
+
+// Per-booking payment transactions. A booking can have many charges:
+//   - 'initial'   — the original payment when booking was confirmed (M7)
+//   - 'extension' — additional nights added mid- or pre-stay (M8)
+//   - 'damage'    — post-stay damage assessed against card on file (M8)
+//   - 'incidental'— late check-out, accidental pet, etc. (M8)
+// Each charge maps to one Stripe PaymentIntent (and optionally one
+// Checkout Session if we sent a hosted payment link).
+//
+// Per-charge stripeFee tracking lets the financials view (M4.2) sum
+// fees accurately across multiple charges per booking.
+model BookingCharge {
+  id              String   @id @default(uuid()) @db.Uuid
+  bookingId       String   @db.Uuid @map("booking_id")
+  booking         Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  kind            String   // 'initial' | 'extension' | 'damage' | 'incidental'
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("usd")
+  description     String?
+  status          String   @default("pending") // 'pending' | 'sent' | 'succeeded' | 'failed' | 'refunded'
+
+  stripePaymentIntentId    String?   @unique @map("stripe_payment_intent_id")
+  stripeCheckoutSessionId  String?   @unique @map("stripe_checkout_session_id")
+  stripeFee                Decimal   @db.Decimal(10, 2) @default(0) @map("stripe_fee")
+  refundedAmount           Decimal   @db.Decimal(10, 2) @default(0) @map("refunded_amount")
+
+  paidAt          DateTime? @map("paid_at")
+  refundedAt      DateTime? @map("refunded_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([bookingId, kind])
+  @@index([status, createdAt])
+  @@map("booking_charge")
 }
 
 // =====================================================================

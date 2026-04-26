@@ -163,7 +163,8 @@ Final V1 entity list:
 - `AdminUser` (single row in V1, schema ready for multi)
 - `AdminSession` (Redis-backed; not a Prisma model — see §6)
 - `Inquiry`
-- `Booking` — with per-jurisdiction tax columns (`state_tlt_amount`, `city_tlt_amount`, `total_tax_amount`, `state_admin_fee_retained`, `tax_exempt`, `ota_remitted_state`, `ota_remitted_city`)
+- `Booking` — with per-jurisdiction tax columns (`state_tlt_amount`, `city_tlt_amount`, `total_tax_amount`, `state_admin_fee_retained`, `tax_exempt`, `ota_remitted_state`, `ota_remitted_city`). Stripe customer id stays here; payment intents + fees moved to `BookingCharge`.
+- `BookingCharge` — one-to-many under `Booking` (D-020). Each row is one Stripe transaction with `kind` (`initial | extension | damage | incidental`), amount, status, `stripePaymentIntentId`, `stripeCheckoutSessionId`, `stripeFee`, `refundedAmount`. Enables multiple payments per booking for stay extensions, damage charges, and incidentals (PRD §4.5–§4.6).
 - `Cleaner`
 - `CleanerToken` (long-lived, hashed, revocable; portal access)
 - `CleanerRequestToken` (single-use, signed, scoped to one assignment + action; defeats CSRF/replay)

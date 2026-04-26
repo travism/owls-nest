@@ -101,6 +101,7 @@ const TABLES = [
   'cleaner_request_token',
   'cleaner_token',
   'turnover_assignment',
+  'booking_charge',
   'message',
   'message_template',
   'review',

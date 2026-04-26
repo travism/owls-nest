@@ -102,6 +102,24 @@ Disk encryption + encrypted backups are sufficient at single-property scale. Rev
 
 ---
 
+### CO-11 — Rate limiting on the API (`@nestjs/throttler`)
+- **Origin:** M6 (became real with the first spam-attractive public POST)
+- **Type:** hardening
+- **Status:** 🟢 Open
+
+ARCHITECTURE.md §12.3 specifies `@nestjs/throttler` globally at 100 req/min/IP for `/api/v1/*` with stricter limits on `/auth/*` and public POSTs. Currently nothing throttles. This was tolerable while every public endpoint was an idempotent GET (property, availability, pricing/quote, calendar/export.ics) — caching at Cloudflare absorbs most abuse. M6 just shipped `POST /api/v1/inquiries`, which writes a DB row + an Outbox row per request. M7 will add `POST /api/v1/bookings`, same shape. Both are ripe for spam.
+
+Per arch §12.3, limits to wire:
+- Global: 100 req/min/IP across `/api/v1/*`
+- `/api/v1/auth/admin/login`: 5/min/IP + 5/min/email
+- `/api/v1/auth/guest/request-link` (M3.7): 3/min/email
+- `/api/v1/inquiries`: distinct stricter limit (suggest 5/min/IP, 20/day/IP)
+- `/api/v1/bookings` (M7): same shape as inquiries
+
+**When:** before M7 ships, or as a small dedicated commit between M6 and M7. Adds `@nestjs/throttler` dep, a global guard registration, and per-route `@Throttle()` decorators on the sensitive endpoints. Tests: an e2e that fires N+1 requests and asserts the last one is 429 RATE_LIMITED.
+
+---
+
 ### CO-10 — Lighthouse perf ≥ 90 on Home
 - **Origin:** M5
 - **Type:** deploy

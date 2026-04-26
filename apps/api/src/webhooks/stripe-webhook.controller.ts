@@ -164,6 +164,9 @@ export class StripeWebhookController {
       amount?: number;
     };
     const charge = await this.findChargeByPI(dispute.payment_intent);
+    // Outbox row: drained asynchronously by OutboxDrainService.
+    // Side effects (email/SMS/rebuild) fire from the drain, not here.
+    // See docs/DECISION-LOG.md D-019 + D-022.
     await this.prisma.outbox.create({
       data: {
         jobName: 'admin-notification',
@@ -198,6 +201,9 @@ export class StripeWebhookController {
       status?: string;
     };
     const charge = await this.findChargeByPI(dispute.payment_intent);
+    // Outbox row: drained asynchronously by OutboxDrainService.
+    // Side effects (email/SMS/rebuild) fire from the drain, not here.
+    // See docs/DECISION-LOG.md D-019 + D-022.
     await this.prisma.outbox.create({
       data: {
         jobName: 'admin-notification',
@@ -264,6 +270,9 @@ export class StripeWebhookController {
       });
     }
 
+    // Outbox row: drained asynchronously by OutboxDrainService.
+    // Side effects (email/SMS/rebuild) fire from the drain, not here.
+    // See docs/DECISION-LOG.md D-019 + D-022.
     await this.prisma.outbox.create({
       data: {
         jobName: 'admin-notification',
@@ -293,6 +302,9 @@ export class StripeWebhookController {
       last_payment_error?: { message?: string };
     };
     const charge = await this.findChargeByPI(pi.id);
+    // Outbox row: drained asynchronously by OutboxDrainService.
+    // Side effects (email/SMS/rebuild) fire from the drain, not here.
+    // See docs/DECISION-LOG.md D-019 + D-022.
     await this.prisma.outbox.create({
       data: {
         jobName: 'admin-notification',

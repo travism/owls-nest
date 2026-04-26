@@ -57,7 +57,9 @@ export class InquiryService {
         },
       });
 
-      // Outbox row — admin notification. Drained by OutboxDrainService (M9).
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'admin-notification',
@@ -74,7 +76,9 @@ export class InquiryService {
         },
       });
 
-      // Guest acknowledgement — drained by OutboxDrainService (M9).
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',

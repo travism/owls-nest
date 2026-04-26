@@ -18,12 +18,24 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { AdminSessionGuard, type RequestWithAdmin } from '../auth/admin-session.guard';
 import { AuditService } from '../auth/audit.service';
 import { z } from 'zod';
 import { BookingService, type BookingStatus, type AdHocChargeKind } from './booking.service';
+
+// Stricter rate limit on sensitive admin booking actions (M10 / arch §12.3).
+// Defense-in-depth on top of session auth + audit log. The TEST_MULTIPLIER
+// in throttler.module.ts bumps this 1000x in NODE_ENV=test so existing
+// e2e suites don't trip it; rate-limit.e2e-spec.ts exercises the real path.
+const ADMIN_ACTION_THROTTLE = {
+  default: {
+    limit: 5 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+    ttl: 60_000,
+  },
+};
 
 const StatusFilterSchema = z.object({
   status: z
@@ -87,6 +99,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/approve')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async approve(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: RequestWithAdmin,
@@ -107,6 +120,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/decline')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async decline(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(DeclineBodySchema))
@@ -129,6 +143,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/cancel')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async cancel(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(CancelBodySchema))
@@ -151,6 +166,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/modify-dates')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async modifyDates(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(ModifyDatesBodySchema))
@@ -173,6 +189,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/charges')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async createCharge(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(AdHocChargeBodySchema))
@@ -199,6 +216,7 @@ export class AdminBookingController {
   }
 
   @Post('charges/:chargeId/refund')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async refundCharge(
     @Param('chargeId', new ParseUUIDPipe()) chargeId: string,
     @Body(new ZodValidationPipe(RefundBodySchema))

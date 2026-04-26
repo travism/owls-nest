@@ -316,6 +316,9 @@ export class BookingService {
           stripeCustomerId: customerId,
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -406,6 +409,9 @@ export class BookingService {
         where: { id: charge.bookingId },
         data: { status: 'confirmed' },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -420,6 +426,9 @@ export class BookingService {
           idempotencyKey: `booking.confirmed:${charge.id}`,
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'rebuild-site',
@@ -473,6 +482,9 @@ export class BookingService {
           cancelledAt: new Date(),
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -581,6 +593,9 @@ export class BookingService {
           cancelledAt: new Date(),
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -596,6 +611,9 @@ export class BookingService {
           idempotencyKey: `booking.cancelled:${booking.id}`,
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'rebuild-site',
@@ -726,6 +744,9 @@ export class BookingService {
           totalTaxAmount: quote.taxes.totalTax,
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -863,6 +884,9 @@ export class BookingService {
           data: { stripeCustomerId: customerId },
         });
       }
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -952,6 +976,9 @@ export class BookingService {
           ...(fullyRefunded ? { status: 'refunded' } : {}),
         },
       });
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',

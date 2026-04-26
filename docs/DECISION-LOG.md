@@ -406,4 +406,31 @@ If we shipped M7 with a single-payment design, every one of these would later re
 
 ---
 
+## D-023 — V1 booking flow: guest inquiry → admin convert → admin approve. No public `POST /api/v1/bookings/request` endpoint.
+
+- **Date:** 2026-04-26
+- **Status:** Accepted
+
+**Decision:** In Phase 1, guests cannot directly create a `Booking` row. The only public state-creating booking endpoint is `POST /api/v1/inquiries` (M6). An admin reviews the inquiry, converts it into a `Booking` (M7), and approves it. There is no public `POST /api/v1/bookings/request` endpoint until Phase 3.
+
+**Alternatives considered:**
+
+- A. Ship `POST /api/v1/bookings/request` in M7 as a public endpoint that creates a `pending_approval` booking directly. Rejected — see rationale.
+- B. Ship the same endpoint behind email-magic-link auth in Phase 1. Rejected: magic-link auth (D-001 + Phase 3 / M3.7) doesn't land until Phase 3, and pulling it forward bloats Phase 1 scope.
+
+**Rationale:** PRD §4.1 §3b describes a "request to book" flow that requires the requester to be an authenticated guest (per D-001's MailerSend magic-link design). The auth surface for guests doesn't ship until M3.7. Without auth, a public `POST /api/v1/bookings/request` would be a public state-creating endpoint with no meaningful identity binding — every submission writes a `Booking` row, holds inventory via `pending_approval` (`AvailabilityService` reserves those dates), triggers admin notifications, and feeds Stripe Customer creation downstream. That's a much larger blast radius than the inquiry table, which is conceptually a contact-form row.
+
+The inquiry-converted path covers V1 needs end-to-end: guest fills the calendar form → inquiry lands in admin queue → admin converts (creating a Booking) → admin approves (Stripe Checkout link to guest). The friction is exactly one extra admin click per real booking, which is acceptable for a single-property operation that already plans to review every reservation.
+
+**Consequences:**
+
+- M7's "request → `pending_approval`" task is satisfied by the **admin-side** convert path (`POST /admin/inquiries/:id/convert` → Booking). No new public endpoint.
+- No `POST /api/v1/bookings/request` route exists in the V1 router. Public callers see only `/api/v1/inquiries`, `/api/v1/availability`, `/api/v1/pricing/quote`, `/api/v1/property`, and the iCal export.
+- BookingCalendar's "Continue" CTA links to `/book/inquire` (an inquiry form), not to a booking-request form. M5/M6 already implement this.
+- When magic-link auth lands in M3.7, a future decision (likely D-NNN in Phase 3) can re-open this question and ship `POST /api/v1/bookings/request` behind that auth surface — at which point this entry is superseded.
+
+**Reference:** Cross-references D-001 (MailerSend magic links) and Phase 3 / M3.7 (guest magic-link auth) in `docs/BUILD-PLAN.md`. PRD §4.1 §3b describes the long-term flow this decision defers.
+
+---
+
 *New decisions append to the bottom with the next sequential `D-NNN`. Mark superseded decisions as `Status: Superseded by D-NNN` rather than editing in place.*

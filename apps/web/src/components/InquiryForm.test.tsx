@@ -59,6 +59,19 @@ function fillForm(values: Partial<{
 }
 
 describe('InquiryForm', () => {
+  // M10 a11y audit: every interactive form control must have an
+  // associated label per CLAUDE.md directive #9. Asserts via the
+  // accessibility tree rather than DOM markup so it catches all the
+  // valid associations (htmlFor, aria-labelledby, wrapping <label>).
+  it('every form control has an associated accessible label (a11y audit)', () => {
+    const { container } = render(<InquiryForm />);
+    const controls = container.querySelectorAll('input, select, textarea');
+    expect(controls.length).toBeGreaterThan(0);
+    for (const control of Array.from(controls)) {
+      expect(control).toHaveAccessibleName();
+    }
+  });
+
   it('renders all required fields with proper labels', () => {
     render(<InquiryForm />);
     expect(screen.getByLabelText(/your name/i)).toBeInTheDocument();

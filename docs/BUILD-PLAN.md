@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M9 complete — outbox drain, email adapter, Astro rebuild worker, expanded Stripe webhooks
-> **Next up:** M10 — throttling on sensitive admin endpoints, public booking-request decision doc, placeholder pages, a11y label audit, outbox JSDoc
+> **Now:** ✅ Phase 1 fully complete — M1 through M10 all green
+> **Next up:** Phase 2 — operations (cleaner SMS waterfall, two-way guest messaging, iCal import)
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-26 (after M9; 417 tests passing — shared 53, admin 20, web 35, api unit 200, api e2e 109)
+Last updated: 2026-04-26 (after M10; 428 tests passing — shared 53, admin 20, web 45, api unit 200, api e2e 110)
 
 ---
 
@@ -288,17 +288,17 @@ Phase 1 gap-analysis (2026-04-26) flagged four launch-critical gaps the M1–M8 
 ---
 
 ### M10 — Phase 1 polish: throttling, a11y, public booking endpoint, content pages
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
 Lower-severity items from the same gap analysis.
 
-- [ ] **Throttle sensitive admin endpoints** — `@Throttle({ default: { limit: 5, ttl: 60_000 } })` on `POST /admin/bookings/:id/approve|decline|cancel|modify-dates|charges` and `POST /admin/bookings/charges/:id/refund`. Defense-in-depth on top of session auth + audit log.
-- [ ] **Public booking-request path** — decision: defer the guest-initiated `POST /api/v1/bookings/request` to Phase 3 (M3.7 magic-link auth) and document the inquiry → admin convert flow as the V1 path. Capture rationale in DECISION-LOG. (No code change in M10 — this is a documentation gap to close.)
-- [ ] **Placeholder pages** — `/blog`, `/area-guide`, `/faq` Astro pages with "Coming in Phase 3" copy + nav links so we don't ship broken links.
-- [ ] **A11y label audit** — verify every guest-facing form input in `apps/web` has a properly associated `<label htmlFor>`. Add a vitest+jsdom test per form that fails if any input lacks an associated label.
-- [ ] **Outbox JSDoc** — add a one-line comment at every `prisma.outbox.create()` callsite pointing readers to the M9 drain pattern, so contributors know writes alone don't fire side effects.
-- [ ] **Unit/component tests** — label-association tests for each form; throttle e2e for the new admin endpoints.
-- [ ] `pnpm test:all` green.
+- [x] **Throttle sensitive admin endpoints** — `@Throttle({ default: { limit: 5, ttl: 60_000 } })` on `POST /admin/bookings/:id/approve|decline|cancel|modify-dates|charges` and `POST /admin/bookings/charges/:id/refund`. Defense-in-depth on top of session auth + audit log.
+- [x] **Public booking-request path** — decision: defer the guest-initiated `POST /api/v1/bookings/request` to Phase 3 (M3.7 magic-link auth) and document the inquiry → admin convert flow as the V1 path. Captured as **D-023** in DECISION-LOG.
+- [x] **Placeholder pages** — `/blog`, `/area-guide`, `/faq` Astro pages with "Coming in Phase 3" copy + nav links so we don't ship broken links.
+- [x] **A11y label audit** — verified every guest-facing form input in `apps/web` has a properly associated label. Added a `toHaveAccessibleName()` audit test in `InquiryForm.test.tsx` that walks every `<input>/<select>/<textarea>` in the rendered form (the only public form with form controls; `BookingCalendar` is a `react-day-picker` widget with no raw inputs).
+- [x] **Outbox JSDoc** — one-line comment at every `prisma.outbox.create()` / `tx.outbox.create()` callsite (15 total: 9 in `booking.service.ts`, 2 in `inquiry.service.ts`, 4 in `webhooks/stripe-webhook.controller.ts`) pointing to D-019 + D-022.
+- [x] **Unit/component tests** — label-association test in `InquiryForm.test.tsx`; throttle e2e for `POST /admin/bookings/:id/approve` extended into `rate-limit.e2e-spec.ts`; nav + page-structure assertions for the three new pages extended into `pages.test.ts`.
+- [x] `pnpm test:all` green (428 tests; +11 from M9).
 
 **Acceptance:** No 404s from public nav; admin endpoints have stricter rate limits; a11y baseline guaranteed by tests; future contributors won't be confused about the outbox.
 

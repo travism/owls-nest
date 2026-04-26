@@ -238,4 +238,270 @@ describe('Booking lifecycle (e2e)', () => {
     );
     expect(res.status).toBe(404);
   });
+
+  // ---- M8 helpers ----
+
+  async function setupConfirmedBooking(client: TestClient): Promise<{
+    bookingId: string;
+    chargeId: string;
+    sessionId: string;
+  }> {
+    const inquiryId = await publicInquiry(client);
+    const convertRes = await client.post(`/api/v1/admin/inquiries/${inquiryId}/convert`);
+    const bookingId = convertRes.body.convertedBookingId as string;
+    const approveRes = await client.post(`/api/v1/admin/bookings/${bookingId}/approve`);
+    const charge = approveRes.body.booking.charges[0];
+    const sessionId = charge.stripeCheckoutSessionId;
+    fakeStripe.simulatePaymentSucceeded(sessionId, 50);
+    const event = fakeStripe.buildCheckoutSessionCompletedEvent(sessionId);
+    await request(server)
+      .post('/webhooks/stripe')
+      .set('stripe-signature', 'test')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify(event));
+    return { bookingId, chargeId: charge.id, sessionId };
+  }
+
+  describe('Booking decline', () => {
+    it('declines a pending booking and writes outbox', async () => {
+      const client = new TestClient(server);
+      const inquiryId = await publicInquiry(client);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      await client.post(`/api/v1/admin/inquiries/${inquiryId}/convert`);
+      const bookings = await prisma.booking.findMany();
+      const bookingId = bookings[0].id;
+
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/decline`, {
+        reason: 'wrong dates',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('cancelled');
+      expect(res.body.cancellationTierApplied).toBe('declined');
+
+      const outbox = await prisma.outbox.findMany();
+      expect(outbox.some((o) => (o.payload as any).event === 'booking.declined')).toBe(true);
+    });
+  });
+
+  describe('Booking cancel', () => {
+    async function setCheckInDays(bookingId: string, daysAhead: number) {
+      const checkIn = new Date(Date.now() + daysAhead * 86400000);
+      // strip time portion to a date-only
+      checkIn.setUTCHours(0, 0, 0, 0);
+      const checkOut = new Date(checkIn.getTime() + 3 * 86400000);
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { checkIn, checkOut },
+      });
+    }
+
+    it('30+ days out: full refund, charge marked refunded', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId, chargeId } = await setupConfirmedBooking(client);
+      await setCheckInDays(bookingId, 60);
+      const refundsBefore = fakeStripe.refunds.length;
+
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {});
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('cancelled');
+      expect(res.body.cancellationTierApplied).toBe('30-day:100%');
+      expect(Number(res.body.refundAmount)).toBeCloseTo(663);
+
+      expect(fakeStripe.refunds.length).toBe(refundsBefore + 1);
+      const charge = await prisma.bookingCharge.findUnique({ where: { id: chargeId } });
+      expect(charge?.status).toBe('refunded');
+      expect(Number(charge?.refundedAmount)).toBeCloseTo(663);
+
+      const outbox = await prisma.outbox.findMany();
+      const events = outbox.map((o) => (o.payload as any)?.event ?? (o.payload as any)?.reason);
+      expect(events).toContain('booking.cancelled');
+      expect(outbox.some((o) => o.jobName === 'rebuild-site' && (o.payload as any).reason === 'booking.cancelled')).toBe(true);
+    });
+
+    it('14-29 days: 50% refund', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+      await setCheckInDays(bookingId, 20);
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {});
+      expect(res.body.cancellationTierApplied).toBe('14-day:50%');
+      expect(Number(res.body.refundAmount)).toBeCloseTo(331.5);
+    });
+
+    it('within 14 days: 0% refund, no Stripe call', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+      await setCheckInDays(bookingId, 5);
+      const refundsBefore = fakeStripe.refunds.length;
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {});
+      expect(res.body.cancellationTierApplied).toBe('0-day:0%');
+      expect(Number(res.body.refundAmount)).toBe(0);
+      expect(fakeStripe.refunds.length).toBe(refundsBefore);
+    });
+  });
+
+  describe('Booking modify-dates', () => {
+    it('increase: returns suggestedAdHocChargeKind=extension, no refund', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+      const refundsBefore = fakeStripe.refunds.length;
+
+      // Stretch from 3 nights → 5 nights
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/modify-dates`, {
+        checkIn: '2026-07-15',
+        checkOut: '2026-07-20',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.delta.direction).toBe('increase');
+      expect(res.body.delta.suggestedAdHocChargeKind).toBe('extension');
+      expect(res.body.delta.refundIssued).toBeNull();
+      expect(fakeStripe.refunds.length).toBe(refundsBefore);
+    });
+
+    it('decrease: auto-refunds against initial charge', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId, chargeId } = await setupConfirmedBooking(client);
+      const refundsBefore = fakeStripe.refunds.length;
+
+      // Shrink to 2 nights
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/modify-dates`, {
+        checkIn: '2026-07-15',
+        checkOut: '2026-07-17',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.delta.direction).toBe('decrease');
+      expect(res.body.delta.refundIssued).not.toBeNull();
+      expect(res.body.delta.suggestedAdHocChargeKind).toBeNull();
+      expect(fakeStripe.refunds.length).toBe(refundsBefore + 1);
+      const charge = await prisma.bookingCharge.findUnique({ where: { id: chargeId } });
+      expect(Number(charge?.refundedAmount)).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Ad-hoc charge', () => {
+    it('creates a damage charge with sent status', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/charges`, {
+        kind: 'damage',
+        amount: 200,
+        description: 'broken lamp',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.checkoutUrl).toMatch(/checkout\.stripe\.test/);
+      const newCharge = res.body.booking.charges.find((c: any) => c.id === res.body.chargeId);
+      expect(newCharge.kind).toBe('damage');
+      expect(newCharge.status).toBe('sent');
+      expect(newCharge.stripeCheckoutSessionId).toBeTruthy();
+
+      const outbox = await prisma.outbox.findMany();
+      expect(
+        outbox.some((o) => (o.payload as any).event === 'booking.ad_hoc_charge_sent'),
+      ).toBe(true);
+    });
+
+    it.each(['extension', 'damage', 'incidental'] as const)('creates a %s charge', async (kind) => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+      const res = await client.post(`/api/v1/admin/bookings/${bookingId}/charges`, {
+        kind,
+        amount: 100,
+        description: `${kind} test`,
+      });
+      expect(res.status).toBe(201);
+      const newCharge = res.body.booking.charges.find((c: any) => c.id === res.body.chargeId);
+      expect(newCharge.kind).toBe(kind);
+    });
+  });
+
+  describe('Refund charge', () => {
+    it('partial refund leaves status=succeeded; second refund completes it', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { chargeId } = await setupConfirmedBooking(client);
+
+      const r1 = await client.post(`/api/v1/admin/bookings/charges/${chargeId}/refund`, {
+        amount: 100,
+      });
+      expect(r1.status).toBe(201);
+      expect(r1.body.amountRefunded).toBe(100);
+      const c1 = await prisma.bookingCharge.findUnique({ where: { id: chargeId } });
+      expect(c1?.status).toBe('succeeded');
+      expect(Number(c1?.refundedAmount)).toBeCloseTo(100);
+
+      const r2 = await client.post(`/api/v1/admin/bookings/charges/${chargeId}/refund`, {
+        amount: 563,
+      });
+      expect(r2.status).toBe(201);
+      const c2 = await prisma.bookingCharge.findUnique({ where: { id: chargeId } });
+      expect(c2?.status).toBe('refunded');
+      expect(Number(c2?.refundedAmount)).toBeCloseTo(663);
+    });
+
+    it('rejects amount > remaining', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { chargeId } = await setupConfirmedBooking(client);
+      const res = await client.post(`/api/v1/admin/bookings/charges/${chargeId}/refund`, {
+        amount: 9999,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('Audit log writes', () => {
+    it('writes audit entries for decline / cancel / modify / ad-hoc / refund', async () => {
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+
+      // decline path
+      const inq1 = await publicInquiry(client);
+      await client.post(`/api/v1/admin/inquiries/${inq1}/convert`);
+      const b1 = (await prisma.booking.findFirst({ where: { status: 'pending_approval' } }))!;
+      await client.post(`/api/v1/admin/bookings/${b1.id}/decline`, { reason: 'no' });
+
+      // confirmed flow for cancel + modify + ad-hoc + refund
+      const { bookingId, chargeId } = await setupConfirmedBooking(client);
+      await client.post(`/api/v1/admin/bookings/${bookingId}/modify-dates`, {
+        checkIn: '2026-07-15',
+        checkOut: '2026-07-20',
+      });
+      await client.post(`/api/v1/admin/bookings/${bookingId}/charges`, {
+        kind: 'damage',
+        amount: 200,
+        description: 'lamp',
+      });
+      await client.post(`/api/v1/admin/bookings/charges/${chargeId}/refund`, {
+        amount: 50,
+      });
+      await client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {});
+
+      const audit = await prisma.auditLogEntry.findMany();
+      const actions = audit.map((a) => a.action);
+      expect(actions).toContain('booking.decline');
+      expect(actions).toContain('booking.modify_dates');
+      expect(actions).toContain('booking.ad_hoc_charge');
+      expect(actions).toContain('booking.refund_charge');
+      expect(actions).toContain('booking.cancel');
+    });
+  });
 });

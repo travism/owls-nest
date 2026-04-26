@@ -28,6 +28,9 @@ export type AuditAction =
   | 'booking.cancel'
   | 'booking.refund'
   | 'booking.modify'
+  | 'booking.modify_dates'
+  | 'booking.ad_hoc_charge'
+  | 'booking.refund_charge'
   // Payment + webhook
   | 'booking_charge.created'
   | 'booking_charge.succeeded'

@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M7 complete — ready for M8
-> **Next up:** M8 — Booking management actions (incl. ad-hoc charges + extensions)
+> **Now:** ✅ M8 complete — Phase 1 ready to wrap
+> **Next up:** Phase 2 — Operations (cleaner SMS, guest messaging, iCal import)
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-26 (after M7; 316 tests passing)
+Last updated: 2026-04-26 (after M8; 380 tests passing)
 
 ---
 
@@ -236,20 +236,22 @@ Verified 2026-04-25.
 ---
 
 ### M8 — Booking management actions (incl. ad-hoc charges + extensions)
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
 Five admin actions on an existing booking, all built on top of `BookingCharge` (D-020) so the data model stays uniform:
 
-- [ ] **Decline** — with notification to guest
-- [ ] **Cancel** — auto-refund per cancellation tier (configurable thresholds): updates `BookingCharge.refundedAmount` on the `initial` charge, refunds via Stripe, transactionally
-- [ ] **Modify dates** — re-quotes price for the new range; if the new total is higher, suggests creating an ad-hoc `extension` charge for the delta; if lower, refunds the difference against the `initial` charge. PRD §4.6 (stay extensions) is this action + send-payment-request composed together.
-- [ ] **Send ad-hoc payment request** — new flow per PRD §4.5. Admin picks `kind` (`extension | damage | incidental`), enters amount + description, system creates a `BookingCharge`, opens a Checkout Session, sends the payment link via SMS + email. Saves the `stripeCheckoutSessionId` for status tracking.
-- [ ] **Refund any charge** — partial or full refund on a specific `BookingCharge`. Updates `refundedAmount` + writes the Stripe refund event back via webhook.
-- [ ] All five actions write AuditLogEntry with before/after JSON
-- [ ] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one); ad-hoc charge amount validation (positive; reasonable max); extension delta calculator (re-quote new total minus already-paid); per-charge refund-amount calculator
-- [ ] **E2E tests** — decline (sends notification, transitions status); cancel at each tier (30+ days = full refund of `initial` charge, 14–29 = 50%, <14 = $0); modify dates that increase total → admin gets prompted to create extension charge; modify dates that decrease total → refund issued against `initial`; ad-hoc charge happy path (creates `BookingCharge`, sends link, webhook flips to `succeeded`); ad-hoc charge for each `kind`; refund failure rolls back DB state; AuditLogEntry written for each action
-- [ ] **Component tests** — admin booking-detail action buttons (cancel confirms, modify-dates form, send-payment-request modal with kind picker + amount + description)
-- [ ] `pnpm test:all` green
+- [x] **Decline** — with notification to guest (Outbox `booking.declined`)
+- [x] **Cancel** — auto-refund per cancellation tier (30/14/0-day thresholds resolved against `Property.cancellationPolicy`): updates `BookingCharge.refundedAmount` on the `initial` charge, refunds via Stripe, transactionally
+- [x] **Modify dates** — re-quotes price for the new range; if the new total is higher, returns `delta.suggestedAdHocChargeKind='extension'` and the admin UI pre-fills the ad-hoc charge panel for the delta; if lower, refunds the difference against the `initial` charge. PRD §4.6 (stay extensions) is this action + send-payment-request composed together.
+- [x] **Send ad-hoc payment request** — admin picks `kind` (`extension | damage | incidental`), enters amount + description; service creates a `BookingCharge`, opens a Checkout Session, writes Outbox `booking.ad_hoc_charge_sent`. Stripe failure rolls back the pending charge row.
+- [x] **Refund any charge** — partial or full refund on a specific `BookingCharge`. Updates `refundedAmount`; flips status to `refunded` when fully refunded.
+- [x] All five actions write AuditLogEntry with before/after JSON
+- [x] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one and unsorted-tier inputs); refund cents calculator (rounding, alreadyRefunded subtraction, 0% / fully-refunded); BookingService unit tests for decline / cancel (3 tiers + no-charge / not-succeeded paths) / modifyDates (increase/decrease/unchanged + self-overlap) / createAdHocCharge (validation + rollback) / refundCharge (partial / full / non-succeeded)
+- [x] **E2E tests** — decline; cancel at each tier (60d=100%, 20d=50%, 5d=0%); modify-dates increase suggests `extension` no refund, decrease auto-refunds; ad-hoc charge for each `kind`; partial → full refund flips charge to `refunded`; AuditLogEntry written for each action
+- [x] **Component tests** — admin booking-detail action buttons (Approve/Decline for pending; Cancel/Modify/Send for confirmed; refund button on succeeded charge with remaining balance; labeled inputs per CLAUDE.md #9)
+- [x] `pnpm test:all` green
+
+**Notes:** Adds `apps/api/src/booking/cancellation-policy.{ts,spec.ts}`, extends `StripeAdapter` with `createRefund`, adds 5 admin endpoints under `/api/v1/admin/bookings`. No schema changes — uses existing `cancellationTierApplied` / `refundAmount` / `cancelledAt` fields on Booking and `refundedAmount` / `refundedAt` on BookingCharge. Test-count delta: 316 → 380 (+64).
 
 **Acceptance:** All five actions work end-to-end. After M7 + M8 the owner can: take an initial booking; decline/cancel/modify it; send extension or damage charges later. Cancellation tier logic applied to the initial charge; audit log captures every action.
 

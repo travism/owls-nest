@@ -46,6 +46,20 @@ export interface CreateCheckoutSessionInput {
   cancelUrl: string;
 }
 
+export interface StripeRefund {
+  id: string;
+  amount: number; // cents
+  status: string;
+  paymentIntentId: string;
+}
+
+export interface CreateRefundInput {
+  paymentIntentId: string;
+  amountCents: number;
+  reason?: string;
+  metadata?: Record<string, string>;
+}
+
 export const STRIPE_ADAPTER = Symbol('STRIPE_ADAPTER');
 
 export interface StripeAdapter {
@@ -56,6 +70,7 @@ export interface StripeAdapter {
   retrieveCheckoutSession(id: string): Promise<StripeCheckoutSession>;
   retrievePaymentIntent(id: string): Promise<StripePaymentIntent>;
   retrieveBalanceTransaction(id: string): Promise<StripeBalanceTransaction>;
+  createRefund(input: CreateRefundInput): Promise<StripeRefund>;
   /**
    * Verify a webhook signature and return the parsed event.
    * Throws if the signature is invalid.

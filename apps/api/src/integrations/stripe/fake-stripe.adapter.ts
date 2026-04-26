@@ -10,11 +10,13 @@ import { Injectable } from '@nestjs/common';
 import type {
   CreateCheckoutSessionInput,
   CreateCustomerInput,
+  CreateRefundInput,
   StripeAdapter,
   StripeBalanceTransaction,
   StripeCheckoutSession,
   StripeCustomer,
   StripePaymentIntent,
+  StripeRefund,
   StripeWebhookEvent,
 } from './stripe.types';
 
@@ -35,6 +37,11 @@ export class FakeStripeAdapter implements StripeAdapter {
   readonly sessions = new Map<string, FakeSession>();
   readonly paymentIntents = new Map<string, StripePaymentIntent>();
   readonly balanceTransactions = new Map<string, StripeBalanceTransaction>();
+  readonly refunds: StripeRefund[] = [];
+
+  // Single-shot test helpers — set by tests to force the next call to throw.
+  failNextRefundWith: Error | null = null;
+  failNextSessionWith: Error | null = null;
 
   private id(prefix: string): string {
     return `${prefix}_${randomBytes(8).toString('hex')}`;
@@ -49,6 +56,11 @@ export class FakeStripeAdapter implements StripeAdapter {
   async createCheckoutSession(
     input: CreateCheckoutSessionInput,
   ): Promise<StripeCheckoutSession> {
+    if (this.failNextSessionWith) {
+      const err = this.failNextSessionWith;
+      this.failNextSessionWith = null;
+      throw err;
+    }
     const session: FakeSession = {
       id: this.id('cs_test'),
       url: `https://checkout.stripe.test/${this.id('p')}`,
@@ -89,6 +101,22 @@ export class FakeStripeAdapter implements StripeAdapter {
     id: string,
   ): Promise<StripeBalanceTransaction> {
     return this.balanceTransactions.get(id) ?? { id, fee: 0 };
+  }
+
+  async createRefund(input: CreateRefundInput): Promise<StripeRefund> {
+    if (this.failNextRefundWith) {
+      const err = this.failNextRefundWith;
+      this.failNextRefundWith = null;
+      throw err;
+    }
+    const refund: StripeRefund = {
+      id: this.id('re_test'),
+      amount: input.amountCents,
+      status: 'succeeded',
+      paymentIntentId: input.paymentIntentId,
+    };
+    this.refunds.push(refund);
+    return refund;
   }
 
   /**

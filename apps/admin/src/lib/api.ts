@@ -190,8 +190,11 @@ export interface AdminBookingCharge {
   kind: string;
   amount: number;
   status: string;
+  description: string | null;
   stripeCheckoutSessionId: string | null;
   stripePaymentIntentId: string | null;
+  refundedAmount: number;
+  refundedAt: string | null;
   paidAt: string | null;
   createdAt: string;
 }
@@ -211,6 +214,9 @@ export interface AdminBooking {
   totalTaxAmount: number;
   totalWithTax: number;
   stripeCustomerId: string | null;
+  cancellationTierApplied: string | null;
+  refundAmount: number | null;
+  cancelledAt: string | null;
   charges: AdminBookingCharge[];
   createdAt: string;
   updatedAt: string;
@@ -220,6 +226,30 @@ export interface ApprovalResponse {
   booking: AdminBooking;
   checkoutUrl: string;
   chargeId: string;
+}
+
+export type AdHocChargeKind = 'extension' | 'damage' | 'incidental';
+
+export interface ModifyDatesResponse {
+  booking: AdminBooking;
+  delta: {
+    direction: 'increase' | 'decrease' | 'unchanged';
+    amount: number;
+    suggestedAdHocChargeKind: AdHocChargeKind | null;
+    refundIssued: { chargeId: string; amount: number } | null;
+  };
+}
+
+export interface AdHocChargeResponse {
+  booking: AdminBooking;
+  chargeId: string;
+  checkoutUrl: string;
+}
+
+export interface RefundResponse {
+  booking: AdminBooking;
+  chargeId: string;
+  amountRefunded: number;
 }
 
 export const bookingsApi = {
@@ -232,6 +262,24 @@ export const bookingsApi = {
   get: (id: string) => api.get<AdminBooking>(`/api/v1/admin/bookings/${id}`),
   approve: (id: string) =>
     api.post<ApprovalResponse>(`/api/v1/admin/bookings/${id}/approve`),
+  decline: (id: string, reason?: string) =>
+    api.post<AdminBooking>(`/api/v1/admin/bookings/${id}/decline`, { reason }),
+  cancel: (id: string, reason?: string) =>
+    api.post<AdminBooking>(`/api/v1/admin/bookings/${id}/cancel`, { reason }),
+  modifyDates: (id: string, checkIn: string, checkOut: string) =>
+    api.post<ModifyDatesResponse>(`/api/v1/admin/bookings/${id}/modify-dates`, {
+      checkIn,
+      checkOut,
+    }),
+  createCharge: (
+    id: string,
+    body: { kind: AdHocChargeKind; amount: number; description: string },
+  ) => api.post<AdHocChargeResponse>(`/api/v1/admin/bookings/${id}/charges`, body),
+  refundCharge: (chargeId: string, amount: number, reason?: string) =>
+    api.post<RefundResponse>(`/api/v1/admin/bookings/charges/${chargeId}/refund`, {
+      amount,
+      reason,
+    }),
 };
 
 export const inquiriesApi = {

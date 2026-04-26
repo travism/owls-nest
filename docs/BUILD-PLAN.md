@@ -8,8 +8,8 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M8 complete — Phase 1 ready to wrap
-> **Next up:** Phase 2 — Operations (cleaner SMS, guest messaging, iCal import)
+> **Now:** ✅ M8 complete; Phase 1 gap analysis surfaced launch-critical work — see M9 + M10
+> **Next up:** M9 — outbox drain worker, email adapter (MailHog dev / MailerSend prod), Astro rebuild worker, Stripe dispute/refund webhooks
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
 Last updated: 2026-04-26 (after M8; 380 tests passing)
@@ -257,7 +257,48 @@ Five admin actions on an existing booking, all built on top of `BookingCharge` (
 
 ---
 
-**Phase 1 done when:** all M1–M8 ✅ and the property can take a real direct booking from a guest.
+### M9 — Phase 1 hardening: outbox drain, email, webhooks, rebuild worker
+**Status:** ⬜ Not started
+
+Phase 1 gap-analysis (2026-04-26) flagged four launch-critical gaps the M1–M8 build plan didn't cover. None block existing tests; all block real-world operation. M9 closes them.
+
+- [ ] **Outbox drain worker** — implement a poller (in `apps/build-worker` or a new `apps/outbox-worker`) that finds `Outbox` rows with `processedAt IS NULL`, dispatches them by `jobName` (`guest-notification` → email/SMS, `rebuild-site` → Astro build), stamps `processedAt` on success, increments `attempts` + writes `failureReason` on error with exponential backoff. Idempotency keys protect against duplicate sends.
+- [ ] **Email adapter** — `EmailAdapter` interface + three implementations:
+  - `MailHogAdapter` (SMTP via `nodemailer`) for `NODE_ENV=development` (per D-021)
+  - `MailerSendAdapter` (`@mailersend/mailersend` SDK) for production (D-001)
+  - `FakeEmailAdapter` (in-memory, like `FakeStripeAdapter`) for tests
+  - Resolution via `EMAIL_PROVIDER` env (`mailhog | mailersend | fake`); default to `fake` when `NODE_ENV=test`
+  - Templates as code under `apps/api/src/integrations/email/templates/` returning `{ subject, html, text }` — same payload to either provider for dev/prod parity
+  - MailHog Compose service exposing 1025 (SMTP) + 8025 (web UI)
+- [ ] **Astro rebuild worker** — replace the `rebuild-site` consumer's TODO in `apps/build-worker/src/main.ts` with a real `astro build` invocation, atomic swap of the `web-dist` volume, 30-second debounce per D-005, retry on failure.
+- [ ] **Stripe webhook event coverage** — handle `charge.dispute.created`, `charge.dispute.closed`, `charge.refunded` (covers refunds initiated outside our app), `payment_intent.payment_failed`. Each writes an Outbox `admin-notification` row + an AuditLogEntry. WebhookEvent idempotency already in place.
+- [ ] **Decision-log entries** — D-021 (MailHog dev / MailerSend prod / templates rendered as code), D-022 (outbox drain implementation choice).
+- [ ] **Unit tests** — outbox dispatcher (job-name routing, retry/backoff, idempotency); each email template renders deterministically; FakeEmailAdapter records sends; Stripe webhook handlers per event type.
+- [ ] **E2E tests** — submit inquiry → assert outbox row drains → FakeEmailAdapter shows the inquiry-received email; approve booking → drain → payment-link email; simulate `charge.dispute.created` → admin-notification outbox + audit.
+- [ ] `pnpm test:all` green.
+
+**Acceptance:** A real booking end-to-end produces a real email at every transition; admin gets notified on disputes/failures; `rebuild-site` actually rebuilds the static site. After M9 the platform can be put in front of a paying guest.
+
+---
+
+### M10 — Phase 1 polish: throttling, a11y, public booking endpoint, content pages
+**Status:** ⬜ Not started
+
+Lower-severity items from the same gap analysis.
+
+- [ ] **Throttle sensitive admin endpoints** — `@Throttle({ default: { limit: 5, ttl: 60_000 } })` on `POST /admin/bookings/:id/approve|decline|cancel|modify-dates|charges` and `POST /admin/bookings/charges/:id/refund`. Defense-in-depth on top of session auth + audit log.
+- [ ] **Public booking-request path** — decision: defer the guest-initiated `POST /api/v1/bookings/request` to Phase 3 (M3.7 magic-link auth) and document the inquiry → admin convert flow as the V1 path. Capture rationale in DECISION-LOG. (No code change in M10 — this is a documentation gap to close.)
+- [ ] **Placeholder pages** — `/blog`, `/area-guide`, `/faq` Astro pages with "Coming in Phase 3" copy + nav links so we don't ship broken links.
+- [ ] **A11y label audit** — verify every guest-facing form input in `apps/web` has a properly associated `<label htmlFor>`. Add a vitest+jsdom test per form that fails if any input lacks an associated label.
+- [ ] **Outbox JSDoc** — add a one-line comment at every `prisma.outbox.create()` callsite pointing readers to the M9 drain pattern, so contributors know writes alone don't fire side effects.
+- [ ] **Unit/component tests** — label-association tests for each form; throttle e2e for the new admin endpoints.
+- [ ] `pnpm test:all` green.
+
+**Acceptance:** No 404s from public nav; admin endpoints have stricter rate limits; a11y baseline guaranteed by tests; future contributors won't be confused about the outbox.
+
+---
+
+**Phase 1 done when:** all M1–M10 ✅ and the property can take a real direct booking from a guest **and actually deliver the email/SMS confirmation**.
 
 ### Inter-milestone fixes
 

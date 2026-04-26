@@ -8,6 +8,8 @@ import { DashboardPage } from './pages/Dashboard';
 import { PropertySettingsPage } from './pages/PropertySettings';
 import { BlockedDatesPage } from './pages/BlockedDates';
 import { InquiriesPage } from './pages/Inquiries';
+import { BookingsPage } from './pages/Bookings';
+import { BookingDetailPage } from './pages/BookingDetail';
 
 export function App() {
   return (
@@ -45,6 +47,22 @@ export function App() {
         element={
           <AuthBoundary>
             <InquiriesPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/bookings"
+        element={
+          <AuthBoundary>
+            <BookingsPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/bookings/:id"
+        element={
+          <AuthBoundary>
+            <BookingDetailPage />
           </AuthBoundary>
         }
       />

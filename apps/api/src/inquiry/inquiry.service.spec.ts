@@ -86,10 +86,36 @@ const VALID_INPUT = {
   message: 'Looking forward to visiting Smith Rock!',
 };
 
+// InquiryService.convert delegates to BookingService.convertInquiry. The
+// real conversion logic (validation, Booking + Guest creation) is unit-tested
+// in booking.service.spec.ts and exercised end-to-end in inquiry.e2e-spec.ts.
+// This stub stamps the inquiry as 'converted' so InquiryService.convert can
+// refetch and return the right shape.
+function fakeBookings(prisma: ReturnType<typeof buildPrisma>) {
+  return {
+    convertInquiry: jest.fn(async (id: string) => {
+      const row = prisma.rows().find((r) => r.id === id);
+      if (!row) throw new Error('not found');
+      if (row.status === 'converted')
+        throw new (require('@nestjs/common').ConflictException)({
+          code: 'CONFLICT',
+          message: 'Inquiry already converted.',
+        });
+      if (row.status === 'closed')
+        throw new (require('@nestjs/common').BadRequestException)({
+          code: 'VALIDATION_FAILED',
+          message: 'Closed inquiries cannot be converted.',
+        });
+      row.status = 'converted';
+      return { id: 'booking-fake' } as any;
+    }),
+  };
+}
+
 describe('InquiryService', () => {
   it('creates an inquiry and writes an outbox row in the same transaction', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const result = await svc.create(VALID_INPUT);
     expect(result.name).toBe('Jane Smith');
     expect(result.status).toBe('new');
@@ -105,7 +131,7 @@ describe('InquiryService', () => {
 
   it('serializes phone and message as null when not provided', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const { phone, message, ...input } = VALID_INPUT;
     void phone; void message;
     const result = await svc.create(input as any);
@@ -115,7 +141,7 @@ describe('InquiryService', () => {
 
   it('lists inquiries, optionally filtering by status', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     await svc.create(VALID_INPUT);
     await svc.create(VALID_INPUT);
     expect(await svc.list()).toHaveLength(2);
@@ -123,7 +149,7 @@ describe('InquiryService', () => {
 
   it('getById returns 404 for unknown id', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     await expect(svc.getById('nonexistent')).rejects.toThrow(NotFoundException);
   });
 
@@ -131,7 +157,7 @@ describe('InquiryService', () => {
 
   it('allows new → responded', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     const updated = await svc.transition(created.id, 'responded');
     expect(updated.status).toBe('responded');
@@ -139,7 +165,7 @@ describe('InquiryService', () => {
 
   it('allows new → closed', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     const updated = await svc.transition(created.id, 'closed');
     expect(updated.status).toBe('closed');
@@ -147,7 +173,7 @@ describe('InquiryService', () => {
 
   it('allows responded → closed', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     await svc.transition(created.id, 'responded');
     const closed = await svc.transition(created.id, 'closed');
@@ -156,7 +182,7 @@ describe('InquiryService', () => {
 
   it('rejects illegal transition (closed → responded)', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     await svc.transition(created.id, 'closed');
     await expect(svc.transition(created.id, 'responded')).rejects.toThrow(
@@ -166,7 +192,7 @@ describe('InquiryService', () => {
 
   it('rejects transition on unknown inquiry', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     await expect(svc.transition('nope', 'responded')).rejects.toThrow(
       NotFoundException,
     );
@@ -176,7 +202,7 @@ describe('InquiryService', () => {
 
   it('converts a new inquiry', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     const converted = await svc.convert(created.id);
     expect(converted.status).toBe('converted');
@@ -184,7 +210,7 @@ describe('InquiryService', () => {
 
   it('converts a responded inquiry', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     await svc.transition(created.id, 'responded');
     const converted = await svc.convert(created.id);
@@ -193,7 +219,7 @@ describe('InquiryService', () => {
 
   it('rejects converting a closed inquiry', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     await svc.transition(created.id, 'closed');
     await expect(svc.convert(created.id)).rejects.toThrow(BadRequestException);
@@ -201,7 +227,7 @@ describe('InquiryService', () => {
 
   it('rejects double-convert with CONFLICT', async () => {
     const prisma = buildPrisma();
-    const svc = new InquiryService(prisma as any);
+    const svc = new InquiryService(prisma as any, fakeBookings(prisma) as any);
     const created = await svc.create(VALID_INPUT);
     await svc.convert(created.id);
     await expect(svc.convert(created.id)).rejects.toThrow(ConflictException);

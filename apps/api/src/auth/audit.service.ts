@@ -21,12 +21,17 @@ export type AuditAction =
   // Inquiries
   | 'inquiry.transition'
   | 'inquiry.convert'
-  // Booking lifecycle (forward-looking; used in M7/M8)
+  // Booking lifecycle
+  | 'booking.create'
   | 'booking.approve'
   | 'booking.decline'
   | 'booking.cancel'
   | 'booking.refund'
-  | 'booking.modify';
+  | 'booking.modify'
+  // Payment + webhook
+  | 'booking_charge.created'
+  | 'booking_charge.succeeded'
+  | 'webhook.stripe.processed';
 
 @Injectable()
 export class AuditService {

@@ -12,6 +12,9 @@ import { PropertyModule } from './property/property.module';
 import { BlockedDateModule } from './blocked-date/blocked-date.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { InquiryModule } from './inquiry/inquiry.module';
+import { BookingModule } from './booking/booking.module';
+import { StripeModule } from './integrations/stripe/stripe.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { AppThrottlerModule } from './throttler/throttler.module';
 
 @Module({
@@ -36,7 +39,10 @@ import { AppThrottlerModule } from './throttler/throttler.module';
     PropertyModule,
     BlockedDateModule,
     CalendarModule,
+    StripeModule,
+    BookingModule,
     InquiryModule,
+    WebhooksModule,
   ],
   providers: [
     // Apply ThrottlerGuard globally — uses the 'default' bucket (100/min/IP)

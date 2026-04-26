@@ -13,13 +13,13 @@
 
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { InquiryCreate } from '@owlsnest/shared';
 import { Prisma } from '@owlsnest/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { BookingService } from '../booking/booking.service';
 
 export type InquiryStatus = 'new' | 'responded' | 'converted' | 'closed';
 
@@ -33,7 +33,10 @@ const ALLOWED_TRANSITIONS: Record<InquiryStatus, InquiryStatus[]> = {
 
 @Injectable()
 export class InquiryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bookings: BookingService,
+  ) {}
 
   /**
    * Public submission. Always returns a row (we don't expose duplicate
@@ -119,26 +122,18 @@ export class InquiryService {
    * stop seeing it in the active queue.
    */
   async convert(id: string) {
-    const existing = await this.prisma.inquiry.findUnique({ where: { id } });
-    if (!existing) {
+    // Delegates to BookingService.convertInquiry which:
+    //   - validates inquiry state (throws CONFLICT / VALIDATION_FAILED here too)
+    //   - upserts a Guest record by email
+    //   - creates a Booking row in pending_approval with current pricing
+    //   - stamps the inquiry as 'converted' with convertedBookingId set
+    // Then we refetch and return the inquiry in its now-converted state, so
+    // the response shape stays compatible with M6 callers.
+    await this.bookings.convertInquiry(id);
+    const updated = await this.prisma.inquiry.findUnique({ where: { id } });
+    if (!updated) {
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'Inquiry not found.' });
     }
-    if (existing.status === 'converted') {
-      throw new ConflictException({
-        code: 'CONFLICT',
-        message: 'Inquiry already converted.',
-      });
-    }
-    if (existing.status === 'closed') {
-      throw new BadRequestException({
-        code: 'VALIDATION_FAILED',
-        message: 'Closed inquiries cannot be converted.',
-      });
-    }
-    const updated = await this.prisma.inquiry.update({
-      where: { id },
-      data: { status: 'converted' },
-    });
     return this.serialize(updated);
   }
 

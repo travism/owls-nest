@@ -31,6 +31,12 @@ export function DashboardPage() {
           </span>
         </li>
         <li style={{ padding: '0.5rem 0' }}>
+          <Link to="/bookings">Bookings</Link>
+          <span className="muted" style={{ marginLeft: '0.5rem' }}>
+            — converted inquiries with payment status; approve to send a Stripe link
+          </span>
+        </li>
+        <li style={{ padding: '0.5rem 0' }}>
           <Link to="/property">Property settings</Link>
           <span className="muted" style={{ marginLeft: '0.5rem' }}>
             — name, address, pricing, cancellation policy
@@ -45,7 +51,7 @@ export function DashboardPage() {
       </ul>
 
       <p className="muted" style={{ marginTop: '1.5rem' }}>
-        Bookings, cleaners, messaging, and financials land in M5+.
+        Cleaners, messaging, and financials land in Phase 2+.
       </p>
 
       <nav>

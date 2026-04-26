@@ -220,7 +220,7 @@ export function BookingCalendar() {
                 if (continueDisabled) e.preventDefault();
               }}
             >
-              Continue to inquiry →
+              Make Booking Request →
             </a>
             <p className="bc-muted bc-small">
               No payment is taken at this step — we'll review your dates and reply by email.

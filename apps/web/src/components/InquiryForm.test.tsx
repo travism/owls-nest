@@ -67,7 +67,7 @@ describe('InquiryForm', () => {
     expect(screen.getByLabelText(/check-in/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/check-out/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/anything else/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /send inquiry/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send booking request/i })).toBeInTheDocument();
   });
 
   it('client-side validates checkOut > checkIn before hitting the API', async () => {
@@ -78,7 +78,7 @@ describe('InquiryForm', () => {
       checkIn: '2026-07-15',
       checkOut: '2026-07-15', // same day
     });
-    fireEvent.click(screen.getByRole('button', { name: /send inquiry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send booking request/i }));
     await waitFor(() => {
       expect(screen.getByText(/check-out must be after check-in/i)).toBeInTheDocument();
     });
@@ -93,7 +93,7 @@ describe('InquiryForm', () => {
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
     });
-    fireEvent.click(screen.getByRole('button', { name: /send inquiry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send booking request/i }));
     await waitFor(() => {
       // Zod's "Valid email required" message
       expect(screen.getByText(/valid email required/i)).toBeInTheDocument();
@@ -111,7 +111,7 @@ describe('InquiryForm', () => {
       checkOut: '2026-07-18',
       message: 'Heading to Smith Rock',
     });
-    fireEvent.click(screen.getByRole('button', { name: /send inquiry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send booking request/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('status')).toBeInTheDocument();
@@ -180,7 +180,7 @@ describe('InquiryForm', () => {
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
     });
-    fireEvent.click(screen.getByRole('button', { name: /send inquiry/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send booking request/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/invalid request body/i);

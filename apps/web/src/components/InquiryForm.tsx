@@ -121,11 +121,11 @@ export function InquiryForm() {
       <div className="inquiry-form inquiry-form--success" role="status">
         <h2>Thanks — we got it.</h2>
         <p>
-          We'll review your dates and reply by email within a few hours during
-          normal waking hours.
+          We'll review your booking request and reply by email within a few
+          hours during normal waking hours.
         </p>
         <button type="button" className="secondary" onClick={() => setSubmitted(false)}>
-          Submit another inquiry
+          Send another request
         </button>
       </div>
     );
@@ -133,10 +133,10 @@ export function InquiryForm() {
 
   return (
     <form className="inquiry-form" onSubmit={onSubmit} noValidate>
-      <h2>Send an inquiry</h2>
+      <h2>Your details</h2>
       <p className="inquiry-form__lede">
-        Quick way to ask about dates without creating an account. We'll reply by
-        email — usually within a few hours.
+        We'll reply by email — usually within a few hours during normal waking
+        hours. Booking is by request, no payment is taken at this step.
       </p>
 
       <div className="inquiry-form__row">
@@ -257,7 +257,7 @@ export function InquiryForm() {
       )}
 
       <button type="submit" disabled={submitting}>
-        {submitting ? 'Sending…' : 'Send inquiry'}
+        {submitting ? 'Sending…' : 'Send booking request'}
       </button>
     </form>
   );

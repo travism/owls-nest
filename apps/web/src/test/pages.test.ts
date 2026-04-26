@@ -21,7 +21,7 @@ const expectedPages: Array<{ file: string; title: RegExp; h1: RegExp }> = [
   { file: 'gallery.astro',        title: /title="Gallery"/,              h1: /<h1>Gallery<\/h1>/ },
   { file: 'house-rules.astro',    title: /title="House rules/,           h1: /<h1>House rules/ },
   { file: 'book.astro',           title: /title="Book your stay"/,       h1: /<h1>Book your stay<\/h1>/ },
-  { file: 'book/inquire.astro',   title: /title="Send your inquiry"/,    h1: /<h1>Send your inquiry<\/h1>/ },
+  { file: 'book/inquire.astro',   title: /title="Make a booking request"/, h1: /<h1>Make a booking request<\/h1>/ },
 ];
 
 describe('Astro pages — structural assertions', () => {

@@ -9,6 +9,7 @@ import {
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AdminSessionGuard, type RequestWithAdmin } from './admin-session.guard';
@@ -69,6 +70,14 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  // Stricter rate limit on login per arch §12.3 / CO-11. The lockout
+  // service is the per-account safety net; this is the per-IP one.
+  @Throttle({
+    default: {
+      limit: 5 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+      ttl: 60_000,
+    },
+  })
   @UsePipes(new ZodValidationPipe(LoginSchema))
   async login(@Body() body: LoginDto, @Req() req: Request) {
     const result = await this.auth.login({

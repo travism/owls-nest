@@ -237,7 +237,46 @@ Cancellation tier thresholds should be configurable in admin. Refunds processed 
 - **Repeat guests:** Logged-in guests skip the info entry step when booking
 - **No account required for:** Browsing, viewing availability/pricing, submitting inquiries
 
-### 4.5 Discount & Promo Infrastructure (Deferred)
+### 4.5 Additional Payment Requests
+
+A booking is not necessarily a single payment. The platform models payments as a one-to-many relationship (`Booking → BookingCharge[]` per D-020) so the owner can send additional payment requests without having to create new bookings or work around the data model.
+
+**Charge kinds:**
+
+| Kind | When |
+|---|---|
+| `initial` | The first payment when a booking is approved (M7) — the original deposit / full price |
+| `extension` | Additional nights added to an existing booking (see §4.6) |
+| `damage` | Post-stay damage assessed against the card on file |
+| `incidental` | Late check-out, accidental pet, broken-thing replacement, etc. |
+
+**Admin-side flow (M8):**
+
+1. Admin opens any booking in the dashboard
+2. Clicks "Send payment request"
+3. Picks a kind, enters an amount + description ("HVAC service called for guest stay", "Late check-out fee", etc.)
+4. System creates a `BookingCharge`, generates a Stripe Checkout Session, sends the link via SMS + email
+5. Webhook flips the charge status to `succeeded` on payment
+
+The same `stripeCustomerId` carries across charges so the guest's saved payment method (card on file) can be used for off-session charges where appropriate (PRD §11.1).
+
+### 4.6 Stay Extensions
+
+Common case: a guest is staying or about to stay and wants to add nights. As long as the requested nights are available, the owner can extend the booking.
+
+**Flow (admin-driven, V1):**
+
+1. Guest contacts owner (SMS, email, or in-person — no dedicated guest UI in V1)
+2. Owner opens the booking, checks the calendar for availability of the additional nights
+3. Owner uses **"Modify dates"** (M8) to extend `checkOut`
+4. System recalculates booking totals (subtotal + tax) for the new date range
+5. System suggests the delta amount; owner confirms and clicks **"Send payment request"** (the §4.5 ad-hoc flow)
+6. A new `BookingCharge` of `kind='extension'` is created and a payment link goes to the guest
+7. On payment success: booking dates are confirmed extended; iCal export feed reflects the new range; cleaner waterfall (if scheduled) is rescheduled
+
+Self-service guest extensions (a "request extension" button in a future guest portal) are deferred — when that lands, it composes the same primitives.
+
+### 4.7 Discount & Promo Infrastructure (Deferred)
 
 Not in V1, but the data model and booking engine should be built to support:
 
@@ -546,11 +585,12 @@ Each booking record tracks:
 
 | Feature | Implementation |
 |---|---|
-| Payment collection | Stripe Checkout or Payment Links (sent via SMS/email after approval) |
-| Card on file | Stored via Stripe Customer objects for potential damage charges |
-| Refunds | Automated per cancellation policy tiers, admin-triggered |
-| Webhooks | `payment_intent.succeeded`, `charge.refunded`, etc. to update booking status |
-| Fee tracking | Stripe fee data pulled for financial reporting |
+| Payment collection | Stripe Checkout Sessions per `BookingCharge` row — initial deposit, extension, damage, incidental (per §4.5 / D-020). Link sent via SMS + email. |
+| Card on file | Stored via Stripe Customer objects on `Booking.stripeCustomerId`; reused for off-session charges (extensions, damage). |
+| Multiple charges per booking | One booking can have many `BookingCharge` rows. Each has its own `stripePaymentIntentId`, status, and per-charge `stripeFee` for accurate financial reporting. |
+| Refunds | Per-charge: `BookingCharge.refundedAmount` tracks partial/full refunds. Cancellation tiers apply to the `initial` charge automatically; admin-triggered refunds for any other charge. |
+| Webhooks | `checkout.session.completed`, `payment_intent.succeeded`, `charge.refunded`, `charge.dispute.created`. Idempotent on `event.id` via the `WebhookEvent` table. |
+| Fee tracking | Stripe fee data pulled per charge into `BookingCharge.stripeFee` for financial reporting (M4.2). |
 
 ### 11.2 Twilio
 

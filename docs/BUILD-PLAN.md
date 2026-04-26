@@ -219,34 +219,39 @@ Verified 2026-04-25.
 **Status:** ⬜ Not started
 
 - [ ] `BookingModule` request → `pending_approval` state
-- [ ] Admin approval action: creates Stripe Checkout Session, sends payment link via SMS + email
-- [ ] Webhook handler for `checkout.session.completed` → flips booking to confirmed
+- [ ] Admin approval action: creates a `BookingCharge` of `kind='initial'` (D-020), opens a Stripe Checkout Session against it, sends the payment link via SMS + email
+- [ ] Stripe adapter creates/reuses a Stripe Customer keyed on the guest email; saves `Booking.stripeCustomerId` for off-session use later (extensions, damage charges in M8)
+- [ ] Webhook handler for `checkout.session.completed` → flips both the `BookingCharge` to `succeeded` and the `Booking` to `confirmed`
+- [ ] Webhook handler also pulls and records `BookingCharge.stripeFee` from the matched `BalanceTransaction`
 - [ ] Outbox emits confirmation SMS/email + `rebuild-site` job
 - [ ] Conflict detection at approval time (calls `AvailabilityService`)
-- [ ] WebhookEvent idempotency table prevents double-processing
-- [ ] **Unit tests** — `BookingService` state machine (every transition allowed + every disallowed transition rejected); `AvailabilityService.checkAvailability()` (no conflict / direct conflict / OTA conflict / same-day turnaround); Stripe adapter (with injected fake)
-- [ ] **E2E tests** — full happy path through `/api/v1/bookings/request` → admin approve → simulated Stripe webhook → confirmation; conflict detection at approval; webhook idempotency (same event id processed twice → no duplicate side-effects); webhook signature verification rejects bad signatures
+- [ ] `WebhookEvent` idempotency table prevents double-processing
+- [ ] **Unit tests** — `BookingService` state machine (every transition allowed + every disallowed transition rejected); `AvailabilityService.checkAvailability()` (no conflict / direct conflict / OTA conflict / same-day turnaround); Stripe adapter (with injected fake) — assert it creates one `BookingCharge` per approval, never two
+- [ ] **E2E tests** — full happy path through `POST /api/v1/bookings/request` → admin approve → simulated Stripe webhook → confirmation. Asserts both the booking and the initial charge end up in the right states. Includes: conflict detection at approval; webhook idempotency (same event id processed twice → no duplicate `BookingCharge` rows or side-effects); webhook signature verification rejects bad signatures
 - [ ] **Component tests** — public request-to-book form; admin booking-detail view + approval action
 - [ ] `pnpm test:all` green
 
-**Acceptance:** Full happy path — guest selects dates → submits request → admin approves → guest pays → confirmation arrives → `BlockedDate` exists → export `.ics` updated; full test suite green.
+**Acceptance:** Full happy path — guest selects dates → submits request → admin approves → guest pays → confirmation arrives → `BlockedDate` exists → export `.ics` updated. Booking has exactly one `BookingCharge` row of `kind='initial'`, status `succeeded`, with the right Stripe IDs and fee captured.
 
 ---
 
-### M8 — Booking management actions
+### M8 — Booking management actions (incl. ad-hoc charges + extensions)
 **Status:** ⬜ Not started
 
-- [ ] Decline action with notification
-- [ ] Cancel with refund per cancellation tier (configurable thresholds)
-- [ ] Modify dates (re-quotes price; refund or charge difference)
-- [ ] Refund flow wraps Stripe call in Prisma transaction
-- [ ] All four actions write AuditLogEntry
-- [ ] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one); refund-amount calculator; modify-dates re-quote logic
-- [ ] **E2E tests** — decline (sends notification, transitions status); cancel at each tier (30+ days = full refund, 14–29 = 50%, <14 = $0); modify dates (refund vs. charge difference); refund failure rolls back DB state; AuditLogEntry written for each action with correct before/after
-- [ ] **Component tests** — admin booking-detail action buttons (cancel confirms, modify-dates form)
+Five admin actions on an existing booking, all built on top of `BookingCharge` (D-020) so the data model stays uniform:
+
+- [ ] **Decline** — with notification to guest
+- [ ] **Cancel** — auto-refund per cancellation tier (configurable thresholds): updates `BookingCharge.refundedAmount` on the `initial` charge, refunds via Stripe, transactionally
+- [ ] **Modify dates** — re-quotes price for the new range; if the new total is higher, suggests creating an ad-hoc `extension` charge for the delta; if lower, refunds the difference against the `initial` charge. PRD §4.6 (stay extensions) is this action + send-payment-request composed together.
+- [ ] **Send ad-hoc payment request** — new flow per PRD §4.5. Admin picks `kind` (`extension | damage | incidental`), enters amount + description, system creates a `BookingCharge`, opens a Checkout Session, sends the payment link via SMS + email. Saves the `stripeCheckoutSessionId` for status tracking.
+- [ ] **Refund any charge** — partial or full refund on a specific `BookingCharge`. Updates `refundedAmount` + writes the Stripe refund event back via webhook.
+- [ ] All five actions write AuditLogEntry with before/after JSON
+- [ ] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one); ad-hoc charge amount validation (positive; reasonable max); extension delta calculator (re-quote new total minus already-paid); per-charge refund-amount calculator
+- [ ] **E2E tests** — decline (sends notification, transitions status); cancel at each tier (30+ days = full refund of `initial` charge, 14–29 = 50%, <14 = $0); modify dates that increase total → admin gets prompted to create extension charge; modify dates that decrease total → refund issued against `initial`; ad-hoc charge happy path (creates `BookingCharge`, sends link, webhook flips to `succeeded`); ad-hoc charge for each `kind`; refund failure rolls back DB state; AuditLogEntry written for each action
+- [ ] **Component tests** — admin booking-detail action buttons (cancel confirms, modify-dates form, send-payment-request modal with kind picker + amount + description)
 - [ ] `pnpm test:all` green
 
-**Acceptance:** All four actions work end-to-end; cancellation tier logic applied; audit log captures every action; full test suite green.
+**Acceptance:** All five actions work end-to-end. After M7 + M8 the owner can: take an initial booking; decline/cancel/modify it; send extension or damage charges later. Cancellation tier logic applied to the initial charge; audit log captures every action.
 
 ---
 

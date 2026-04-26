@@ -314,4 +314,34 @@ This log captures architectural and product decisions that shape the platform. N
 
 ---
 
+## D-020 — `BookingCharge` entity: one booking → many charges
+
+- **Date:** 2026-04-26
+- **Status:** Accepted
+
+**Decision:** Replace the single `stripePaymentIntentId` + `stripeFee` columns on `Booking` with a separate `BookingCharge` table. Each booking can have many charges, each tied to its own Stripe PaymentIntent (and optionally Checkout Session). Charge `kind` is one of `initial | extension | damage | incidental`. `stripeCustomerId` stays on `Booking` (one customer record reused across all charges for that guest).
+
+**Alternatives considered:**
+- Keep single payment per booking and only add an "additional charges" table later when needed.
+- Use Stripe metadata to track charge kinds without a local table.
+
+**Rationale:** Three real flows need multiple payments per booking:
+1. **Stay extensions** — guest mid-stay wants more nights; admin extends the booking and sends a payment request for the additional amount.
+2. **Damage / incidentals** — post-stay charges using the card on file.
+3. **Refunds** — partial refunds (e.g., cancellation tier returns 50%) tracked per original charge.
+
+If we shipped M7 with a single-payment design, every one of these would later require a schema migration plus a refactor of the financial reporting (M4.2). Cost now: one extra model + a join in queries. Cost later: migrate live booking data + refactor booking/payment/financials code paths together. Pay it now.
+
+**Consequences:**
+- `Booking` no longer carries `stripePaymentIntentId` or `stripeFee` — those moved to `BookingCharge`. `stripeCustomerId` stays.
+- M7 (`Request-to-book + Stripe Checkout`) creates a `BookingCharge` of `kind='initial'` rather than writing fields onto `Booking`.
+- M8 (`Booking management actions`) gains "send ad-hoc payment request" — admin creates a new `BookingCharge` of any kind, system generates a Checkout Session, sends the link via SMS/email.
+- Stay extensions become a natural composition: admin updates `Booking.checkOut` (existing M8 "modify dates") + creates a `BookingCharge` of `kind='extension'` for the prorated additional amount. No new UI surface beyond what M8 already ships.
+- Financial reporting (M4.2) sums across charges per booking. Tax remains computed at the `Booking` level (the planned stay is the taxable unit; ad-hoc charges like damage are typically non-taxable).
+- Webhook idempotency continues to work via `WebhookEvent.id` keyed on Stripe `event.id` — no change.
+
+**Reference:** `packages/prisma/schema.prisma` for the model. PRD §11.1 (Stripe) and §4 (Booking flow) updated to reflect.
+
+---
+
 *New decisions append to the bottom with the next sequential `D-NNN`. Mark superseded decisions as `Status: Superseded by D-NNN` rather than editing in place.*

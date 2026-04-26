@@ -7,8 +7,9 @@
 //   3. Let the guest pick a check-in + check-out range
 //   4. On a complete range that satisfies min-stay, fetch /api/v1/pricing/quote
 //      and render the breakdown
-//   5. Show a "Continue" CTA that hands off to /book/inquire (M6) or
-//      /book/request (M7) — disabled in M5 since those pages don't exist yet
+//   5. Show a "Continue" CTA that links to /book/inquire?checkIn=…&checkOut=…
+//      (M6 — handoff to InquiryForm pre-filled with the selected dates).
+//      M7 will add a sibling /book/request flow for full booking requests.
 //
 // Min-stay enforcement happens client-side AND server-side (the API also
 // rejects below-min ranges). The client-side check just gives faster feedback.
@@ -207,11 +208,22 @@ export function BookingCalendar() {
                 </tr>
               </tbody>
             </table>
-            <button type="button" disabled={continueDisabled} className="bc-cta">
-              Continue (coming soon)
-            </button>
+            <a
+              href={
+                haveRange
+                  ? `/book/inquire?checkIn=${toIso(range!.from!)}&checkOut=${toIso(range!.to!)}`
+                  : '#'
+              }
+              className={`bc-cta button${continueDisabled ? ' bc-cta--disabled' : ''}`}
+              aria-disabled={continueDisabled}
+              onClick={(e) => {
+                if (continueDisabled) e.preventDefault();
+              }}
+            >
+              Continue to inquiry →
+            </a>
             <p className="bc-muted bc-small">
-              Inquiry submission lands in the next milestone — no booking is made yet.
+              No payment is taken at this step — we'll review your dates and reply by email.
             </p>
           </>
         )}

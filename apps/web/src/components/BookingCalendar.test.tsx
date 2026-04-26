@@ -59,6 +59,16 @@ describe('BookingCalendar', () => {
     expect(screen.getByText(/pick check-in and check-out dates/i)).toBeInTheDocument();
   });
 
+  it('does not render the Continue link until dates are selected', async () => {
+    render(<BookingCalendar />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /your stay/i })).toBeInTheDocument();
+    });
+    // Pre-selection state: prompt copy is shown, no Continue link rendered
+    expect(screen.getByText(/pick check-in and check-out dates/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /continue/i })).not.toBeInTheDocument();
+  });
+
   it('shows an error if the API is unreachable', async () => {
     vi.stubGlobal(
       'fetch',

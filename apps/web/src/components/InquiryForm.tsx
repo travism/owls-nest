@@ -1,11 +1,15 @@
-// InquiryForm — public inquiry submission island, rendered below the
-// booking calendar on /book. M6 deliverable: capture name/email/phone/
-// dates/message and POST to /api/v1/inquiries.
+// InquiryForm — public inquiry submission island.
 //
-// We use the same Zod schema (InquiryCreateSchema) the API uses, so
+// Lives on /book/inquire. The /book calendar's "Continue" button hands
+// off the selected dates via URL query params (?checkIn=…&checkOut=…),
+// which this component reads on mount and pre-fills + locks. If no
+// query params are provided (someone hits /book/inquire directly),
+// the date inputs render as normal editable fields.
+//
+// Uses the same Zod schema (InquiryCreateSchema) the API uses so
 // validation errors surface client-side before a round-trip.
 
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import { InquiryCreateSchema } from '@owlsnest/shared';
 import { guestApi, ApiError } from '../lib/api';
 
@@ -13,6 +17,19 @@ type FieldErrors = Partial<Record<
   'name' | 'email' | 'phone' | 'checkIn' | 'checkOut' | 'message',
   string
 >>;
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function readDatesFromUrl(): { checkIn: string; checkOut: string } | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const ci = params.get('checkIn');
+  const co = params.get('checkOut');
+  if (!ci || !co) return null;
+  if (!ISO_DATE_RE.test(ci) || !ISO_DATE_RE.test(co)) return null;
+  if (co <= ci) return null;
+  return { checkIn: ci, checkOut: co };
+}
 
 export function InquiryForm() {
   const ids = {
@@ -30,6 +47,19 @@ export function InquiryForm() {
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [message, setMessage] = useState('');
+  // Once the URL provides dates, those inputs lock — the user must go
+  // back to /book to change them so the calendar's availability/pricing
+  // stays the source of truth.
+  const [datesLocked, setDatesLocked] = useState(false);
+
+  useEffect(() => {
+    const fromUrl = readDatesFromUrl();
+    if (fromUrl) {
+      setCheckIn(fromUrl.checkIn);
+      setCheckOut(fromUrl.checkOut);
+      setDatesLocked(true);
+    }
+  }, []);
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -40,8 +70,10 @@ export function InquiryForm() {
     setName('');
     setEmail('');
     setPhone('');
-    setCheckIn('');
-    setCheckOut('');
+    if (!datesLocked) {
+      setCheckIn('');
+      setCheckOut('');
+    }
     setMessage('');
     setErrors({});
     setSubmitError(null);
@@ -168,6 +200,8 @@ export function InquiryForm() {
             value={checkIn}
             onChange={(e) => setCheckIn(e.target.value)}
             required
+            readOnly={datesLocked}
+            aria-readonly={datesLocked || undefined}
             aria-invalid={!!errors.checkIn}
             aria-describedby={errors.checkIn ? `${ids.checkIn}-err` : undefined}
           />
@@ -186,6 +220,8 @@ export function InquiryForm() {
             value={checkOut}
             onChange={(e) => setCheckOut(e.target.value)}
             required
+            readOnly={datesLocked}
+            aria-readonly={datesLocked || undefined}
             aria-invalid={!!errors.checkOut}
             aria-describedby={errors.checkOut ? `${ids.checkOut}-err` : undefined}
           />
@@ -195,6 +231,11 @@ export function InquiryForm() {
             </small>
           )}
         </label>
+        {datesLocked && (
+          <p className="inquiry-form__locked-hint">
+            Dates pulled from the calendar. <a href="/book">Change dates</a>.
+          </p>
+        )}
       </div>
 
       <label htmlFor={ids.message}>

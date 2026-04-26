@@ -1,0 +1,23 @@
+---
+import Site from '../../layouts/Site.astro';
+import { InquiryForm } from '../../components/InquiryForm';
+import '../../styles/inquiry-form.css';
+---
+
+<Site
+  title="Send your inquiry"
+  description="Send an inquiry about your selected dates at The Owl's Nest. We'll respond by email."
+>
+  <section class="section">
+    <div class="container" style="max-width: 720px;">
+      <h1>Send your inquiry</h1>
+      <p>
+        We'll review your dates and reply by email — usually within a few hours.
+        No payment is taken at this step; if you'd like to confirm, we'll send a
+        Stripe link separately.
+      </p>
+
+      <InquiryForm client:load />
+    </div>
+  </section>
+</Site>

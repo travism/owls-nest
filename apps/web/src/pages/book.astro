@@ -1,9 +1,7 @@
 ---
 import Site from '../layouts/Site.astro';
 import { BookingCalendar } from '../components/BookingCalendar';
-import { InquiryForm } from '../components/InquiryForm';
 import '../styles/booking-calendar.css';
-import '../styles/inquiry-form.css';
 ---
 
 <Site
@@ -14,16 +12,13 @@ import '../styles/inquiry-form.css';
     <div class="container">
       <h1>Book your stay</h1>
       <p style="max-width: 60ch;">
-        Pick your check-in and check-out dates below. We'll show pricing including
-        Oregon and Redmond lodging tax. Booking is by request — we'll review your
-        dates and send a payment link.
+        Pick your check-in and check-out dates below. We'll show pricing
+        including Oregon and Redmond lodging tax, then hand you a quick form
+        to send your inquiry — booking is by request and we'll review your
+        dates personally.
       </p>
 
       <BookingCalendar client:visible />
-
-      <div style="max-width: 720px; margin: 0 auto;">
-        <InquiryForm client:visible />
-      </div>
     </div>
   </section>
 </Site>

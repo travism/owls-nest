@@ -59,6 +59,18 @@
   .inquiry-form__row { grid-template-columns: 1fr 1fr; }
 }
 
+.inquiry-form__locked-hint {
+  grid-column: 1 / -1;
+  margin: -0.5rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--fg-muted);
+}
+
+.inquiry-form input[readonly] {
+  background: var(--color-soft-sand);
+  cursor: default;
+}
+
 .inquiry-form__field-error {
   display: block;
   margin-top: 0.25rem;

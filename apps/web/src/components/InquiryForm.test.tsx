@@ -1,6 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { InquiryForm } from './InquiryForm';
+
+const ORIGINAL_LOCATION = window.location;
+
+function setLocation(search: string) {
+  // jsdom: replace window.location with a mutable copy
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...ORIGINAL_LOCATION, search, href: `http://localhost/${search}` },
+  });
+}
+
+afterEach(() => {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: ORIGINAL_LOCATION,
+  });
+});
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
@@ -112,6 +129,39 @@ describe('InquiryForm', () => {
       checkOut: '2026-07-18',
       message: 'Heading to Smith Rock',
     });
+  });
+
+  it('pre-fills + locks date inputs when checkIn/checkOut are in the URL', async () => {
+    setLocation('?checkIn=2026-07-15&checkOut=2026-07-18');
+    render(<InquiryForm />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/check-in/i)).toHaveValue('2026-07-15');
+    });
+    expect(screen.getByLabelText(/check-out/i)).toHaveValue('2026-07-18');
+    expect(screen.getByLabelText(/check-in/i)).toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/check-out/i)).toHaveAttribute('readonly');
+    // Hint with the change-dates link
+    expect(screen.getByRole('link', { name: /change dates/i })).toHaveAttribute(
+      'href',
+      '/book',
+    );
+  });
+
+  it('ignores URL params with malformed dates (falls back to editable inputs)', async () => {
+    setLocation('?checkIn=not-a-date&checkOut=2026-07-18');
+    render(<InquiryForm />);
+
+    // Inputs should be empty + editable
+    expect(screen.getByLabelText(/check-in/i)).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText(/check-out/i)).not.toHaveAttribute('readonly');
+    expect(screen.queryByRole('link', { name: /change dates/i })).not.toBeInTheDocument();
+  });
+
+  it('ignores URL params when checkOut <= checkIn', async () => {
+    setLocation('?checkIn=2026-07-18&checkOut=2026-07-15');
+    render(<InquiryForm />);
+    expect(screen.getByLabelText(/check-in/i)).not.toHaveAttribute('readonly');
   });
 
   it('shows an error if the API rejects', async () => {

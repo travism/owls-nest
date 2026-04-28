@@ -58,18 +58,25 @@ export interface InquiryPayload {
   guestEmail?: string;
   checkIn: string;
   checkOut: string;
+  numGuests?: number;
+  petCount?: number;
   message?: string | null;
 }
 
 export function inquiryReceived(p: InquiryPayload): RenderedEmail {
   // Sent to admin — see D-018 trigger list.
+  const partyLine =
+    p.numGuests != null
+      ? `Guests: ${p.numGuests}${p.petCount && p.petCount > 0 ? ` · Dogs: ${p.petCount}` : ''}`
+      : null;
   return wrap('New inquiry received', [
     `${escapeHtml(p.guestName)} just submitted an inquiry for ${escapeHtml(dateRange(p.checkIn, p.checkOut))}.`,
+    partyLine ?? '',
     p.message
       ? `Message: <em>${escapeHtml(p.message)}</em>`
       : 'No message attached.',
     `Inquiry ID: <code>${escapeHtml(p.inquiryId)}</code>`,
-  ]);
+  ].filter(Boolean));
 }
 
 export function inquiryAcknowledged(p: InquiryPayload): RenderedEmail {

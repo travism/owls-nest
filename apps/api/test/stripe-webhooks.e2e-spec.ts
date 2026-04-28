@@ -44,8 +44,10 @@ describe('Stripe webhook M9 events (e2e)', () => {
     await client.post('/api/v1/inquiries', {
       name: 'Jane Smith',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     const creds = await enrollAdmin(prisma);
     await signIn(client, creds);

@@ -101,7 +101,8 @@ button, .button {
   text-decoration: none;
   transition: background var(--transition);
 }
-button:hover, .button:hover { background: var(--accent-hover); }
+button:hover, .button:hover { background: var(--accent-hover); color: white; }
+a.button, a.button:hover { color: white; }
 button:disabled { background: #999; cursor: not-allowed; }
 
 button.secondary, .button.secondary {

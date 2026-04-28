@@ -168,6 +168,8 @@ export interface AdminInquiry {
   phone: string | null;
   checkIn: string;
   checkOut: string;
+  numGuests: number;
+  petCount: number;
   message: string | null;
   status: InquiryStatus;
   convertedBookingId: string | null;

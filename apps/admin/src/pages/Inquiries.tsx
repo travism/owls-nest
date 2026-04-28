@@ -204,8 +204,9 @@ function InquiryRow({
           <td colSpan={5} style={{ padding: '0 0.5rem 1rem 0.5rem', background: '#fafaf7' }}>
             <div style={{ padding: '0.75rem 1rem', borderLeft: '3px solid #c8674a' }}>
               <p className="muted" style={{ marginBottom: '0.5rem', fontSize: '0.8rem' }}>
-                Phone: {inquiry.phone ?? 'not provided'} · Submitted{' '}
-                {new Date(inquiry.createdAt).toLocaleString()}
+                Phone: {inquiry.phone ?? 'not provided'} · Guests: {inquiry.numGuests}
+                {inquiry.petCount > 0 ? ` · Dogs: ${inquiry.petCount}` : ' · No pets'}
+                {' · '}Submitted {new Date(inquiry.createdAt).toLocaleString()}
               </p>
               {inquiry.message ? (
                 <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inquiry.message}</p>

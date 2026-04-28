@@ -52,8 +52,10 @@ describe('Email flow via outbox drain (e2e)', () => {
     const res = await client.post('/api/v1/inquiries', {
       name: 'Jane Smith',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
       message: 'Pet friendly?',
     });
     expect(res.status).toBe(201);
@@ -77,8 +79,10 @@ describe('Email flow via outbox drain (e2e)', () => {
     await client.post('/api/v1/inquiries', {
       name: 'Jane Smith',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     const creds = await enrollAdmin(prisma);
     await signIn(client, creds);
@@ -107,8 +111,10 @@ describe('Email flow via outbox drain (e2e)', () => {
     await client.post('/api/v1/inquiries', {
       name: 'Jane Smith',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     const creds = await enrollAdmin(prisma);
     await signIn(client, creds);
@@ -142,8 +148,10 @@ describe('Email flow via outbox drain (e2e)', () => {
     await client.post('/api/v1/inquiries', {
       name: 'Jane',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     const r1 = await drain.tick();
     expect(r1.processed).toBe(2);

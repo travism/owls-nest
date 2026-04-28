@@ -12,6 +12,8 @@ interface InquiryRow {
   phone: string | null;
   checkIn: Date;
   checkOut: Date;
+  numGuests: number;
+  petCount: number;
   message: string | null;
   status: string;
   convertedBookingId: string | null;
@@ -35,6 +37,8 @@ function mockPrisma() {
           phone: data.phone ?? null,
           checkIn: data.checkIn,
           checkOut: data.checkOut,
+          numGuests: data.numGuests,
+          petCount: data.petCount ?? 0,
           message: data.message ?? null,
           status: data.status,
           convertedBookingId: null,
@@ -83,6 +87,8 @@ const VALID_INPUT = {
   phone: '+1 555 0100',
   checkIn: '2026-07-15',
   checkOut: '2026-07-18',
+  numGuests: 2,
+  petCount: 0,
   message: 'Looking forward to visiting Smith Rock!',
 };
 

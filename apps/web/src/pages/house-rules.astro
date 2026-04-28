@@ -14,7 +14,6 @@ const rules = [
   'Up to 4 guests. No additional overnight visitors.',
   'No smoking anywhere on the property.',
   'No parties or events.',
-  'No pets at this time.',
   "Quiet hours from 10pm — we're surrounded by neighbors.",
   'Check-in 3:00 PM, check-out 11:00 AM.',
   "Please leave the home tidy — we don't charge for normal use, but excessive cleaning may incur a fee.",
@@ -37,6 +36,13 @@ const rules = [
       <h2>House rules</h2>
       <ul class="rules-list">
         {rules.map((r) => <li>{r}</li>)}
+      </ul>
+
+      <h2 id="pets" style="scroll-margin-top: 5rem;">Pets</h2>
+      <ul class="rules-list">
+        <li>Maximum of 2 dogs only — other pets are not allowed.</li>
+        <li>Please pick up after them — messes should not be left for others.</li>
+        <li>Pets should not be left alone at the property.</li>
       </ul>
 
       <h2>Cancellation policy</h2>

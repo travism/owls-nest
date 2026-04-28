@@ -145,6 +145,8 @@ model Inquiry {
   phone              String?
   checkIn            DateTime @db.Date @map("check_in")
   checkOut           DateTime @db.Date @map("check_out")
+  numGuests          Int      @default(1) @map("num_guests")
+  petCount           Int      @default(0) @map("pet_count")
   message            String?
   status             String   @default("new")
   convertedBookingId String?  @db.Uuid @map("converted_booking_id")

@@ -8,6 +8,8 @@ describe('InquiryCreateSchema', () => {
     phone: '+1 555 0100',
     checkIn: '2026-07-15',
     checkOut: '2026-07-18',
+    numGuests: 2,
+    petCount: 0,
     message: 'Looking forward to staying!',
   };
 
@@ -16,9 +18,16 @@ describe('InquiryCreateSchema', () => {
   });
 
   it('accepts an inquiry without optional fields', () => {
-    const { phone, message, ...rest } = valid;
-    void phone; void message;
+    const { message, ...rest } = valid;
+    void message;
     expect(InquiryCreateSchema.safeParse(rest).success).toBe(true);
+  });
+
+  it('rejects missing phone', () => {
+    const { phone, ...rest } = valid;
+    void phone;
+    const result = InquiryCreateSchema.safeParse(rest);
+    expect(result.success).toBe(false);
   });
 
   it('rejects an invalid email', () => {
@@ -34,6 +43,23 @@ describe('InquiryCreateSchema', () => {
   it('rejects malformed dates', () => {
     const result = InquiryCreateSchema.safeParse({ ...valid, checkIn: '7/15/2026' });
     expect(result.success).toBe(false);
+  });
+
+  it('rejects numGuests < 1', () => {
+    const result = InquiryCreateSchema.safeParse({ ...valid, numGuests: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects petCount > 2', () => {
+    const result = InquiryCreateSchema.safeParse({ ...valid, petCount: 3 });
+    expect(result.success).toBe(false);
+  });
+
+  it('defaults petCount to 0 when omitted', () => {
+    const { petCount, ...rest } = valid;
+    void petCount;
+    const parsed = InquiryCreateSchema.parse(rest);
+    expect(parsed.petCount).toBe(0);
   });
 
   it('rejects checkOut before or equal to checkIn', () => {

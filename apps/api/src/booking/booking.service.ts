@@ -207,9 +207,7 @@ export class BookingService {
           guestId: guest.id,
           checkIn: inquiry.checkIn,
           checkOut: inquiry.checkOut,
-          // M6's schema defaulted numGuests to 1 when not asked; PRD §4.1 lets
-          // the inquiry skip this. Default to 1 here; admin can edit later.
-          numGuests: 1,
+          numGuests: inquiry.numGuests,
           status: 'pending_approval',
           source: 'direct',
           nightlyRate: quote.nightlyRate,

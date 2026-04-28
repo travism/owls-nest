@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "inquiry" ADD COLUMN     "num_guests" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "pet_count" INTEGER NOT NULL DEFAULT 0;

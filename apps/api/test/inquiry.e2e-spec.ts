@@ -35,8 +35,10 @@ describe('Inquiry (e2e)', () => {
       .send({
         name: 'Anon',
         email: 'anon@example.com',
+        phone: '+1 555 0101',
         checkIn: '2026-07-15',
         checkOut: '2026-07-18',
+        numGuests: 2,
       });
     expect(res.status).toBe(201);
   });
@@ -49,6 +51,7 @@ describe('Inquiry (e2e)', () => {
       phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
       message: 'Heading to Smith Rock!',
     });
     expect(res.status).toBe(201);
@@ -74,10 +77,25 @@ describe('Inquiry (e2e)', () => {
     const res = await client.post('/api/v1/inquiries', {
       name: 'Quick Asker',
       email: 'quick@example.com',
+      phone: '+1 555 0102',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     expect(res.status).toBe(201);
+  });
+
+  it('rejects missing phone', async () => {
+    const client = new TestClient(server);
+    const res = await client.post('/api/v1/inquiries', {
+      name: 'Jane',
+      email: 'jane@example.com',
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-18',
+      numGuests: 2,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
   });
 
   it('rejects invalid email', async () => {
@@ -87,6 +105,7 @@ describe('Inquiry (e2e)', () => {
       email: 'not-an-email',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -110,6 +129,7 @@ describe('Inquiry (e2e)', () => {
       email: 'jane@example.com',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     expect(res.status).toBe(400);
   });
@@ -126,8 +146,10 @@ describe('Inquiry (e2e)', () => {
     const res = await client.post('/api/v1/inquiries', {
       name: 'Jane Smith',
       email: 'jane@example.com',
+      phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
       ...overrides,
     });
     expect(res.status).toBe(201);

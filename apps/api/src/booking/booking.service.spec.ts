@@ -27,6 +27,8 @@ interface InquiryRow {
   phone: string | null;
   checkIn: Date;
   checkOut: Date;
+  numGuests: number;
+  petCount: number;
   status: string;
   convertedBookingId: string | null;
 }
@@ -287,6 +289,8 @@ const VALID_INQUIRY: InquiryRow = {
   phone: '+1 555 0100',
   checkIn: new Date('2026-07-15T00:00:00Z'),
   checkOut: new Date('2026-07-18T00:00:00Z'),
+  numGuests: 3,
+  petCount: 1,
   status: 'new',
   convertedBookingId: null,
 };

@@ -25,6 +25,8 @@
 .inquiry-form input[type="email"],
 .inquiry-form input[type="tel"],
 .inquiry-form input[type="date"],
+.inquiry-form input[type="number"],
+.inquiry-form select,
 .inquiry-form textarea {
   width: 100%;
   padding: 0.55rem 0.75rem;
@@ -86,6 +88,70 @@
   border-radius: var(--radius);
   color: var(--error-fg);
   font-size: 0.875rem;
+}
+
+.inquiry-form__hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.inquiry-form__fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem 0.25rem;
+  margin: 0 0 1rem;
+}
+.inquiry-form__fieldset legend {
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0 0.4rem;
+}
+.inquiry-form__checkbox {
+  display: flex !important;
+  align-items: center;
+  gap: 0.5rem;
+}
+.inquiry-form__checkbox input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+.inquiry-form__checkbox > span {
+  display: inline !important;
+  margin: 0 !important;
+}
+
+.inquiry-form__quote {
+  background: var(--color-soft-sand);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.inquiry-form__quote h2 { margin-bottom: 0.5rem; }
+.inquiry-form__quote-meta {
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+.inquiry-form__quote-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.inquiry-form__quote-table td {
+  padding: 0.3rem 0;
+}
+.inquiry-form__quote-table td:last-child {
+  text-align: right;
+}
+.inquiry-form__quote-total {
+  border-top: 1px solid var(--border-strong);
+  font-weight: 600;
+}
+.inquiry-form__quote-total td {
+  padding-top: 0.5rem;
 }
 
 .inquiry-form--success {

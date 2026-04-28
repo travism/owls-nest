@@ -44,6 +44,7 @@ describe('Booking lifecycle (e2e)', () => {
       phone: '+1 555 0100',
       checkIn: '2026-07-15',
       checkOut: '2026-07-18',
+      numGuests: 2,
     });
     expect(res.status).toBe(201);
     return res.body.id as string;

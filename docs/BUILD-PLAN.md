@@ -8,8 +8,8 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ Phase 1 fully complete — M1 through M10 all green
-> **Next up:** Phase 2 — operations (cleaner SMS waterfall, two-way guest messaging, iCal import)
+> **Now:** ✅ M10 merged; second-round gap analysis ran 2026-04-28 surfaced 6 missed items — see M11
+> **Next up:** M11 — guest-usable emails, outbox dead-letter visibility, remaining throttle gaps, MailerSend boot guard, race test
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
 Last updated: 2026-04-26 (after M10; 428 tests passing — shared 53, admin 20, web 45, api unit 200, api e2e 110)
@@ -304,7 +304,24 @@ Lower-severity items from the same gap analysis.
 
 ---
 
-**Phase 1 done when:** all M1–M10 ✅ and the property can take a real direct booking from a guest **and actually deliver the email/SMS confirmation**.
+### M11 — Phase 1 v2 gap fixes
+**Status:** ⬜ Not started
+
+A second-round gap analysis (2026-04-28, after M10 merged to main) surfaced six items missed by the first round. Three are launch-critical (P0); three are tier-1 polish.
+
+- [ ] **Email templates carry the info a guest actually needs.** `bookingConfirmed` and `bookingPaymentLink` currently include only the booking ID + total. Expand both payloads + templates to include check-in / check-out dates, the property address (`Property.addressLine1, city, state postalCode`), check-in time, and a link to the house-rules page. Update the BookingService outbox writers to include those fields.
+- [ ] **Outbox dead-letter visibility.** Add `GET /api/v1/admin/outbox-health` returning `{ deadLettered: count, oldestDeadLetterAt: iso, recent: [{id, jobName, idempotencyKey, attempts, failureReason, createdAt}] }`. AdminSessionGuard. Add admin SPA card on the Dashboard linking to a small Outbox page that lists dead-lettered rows. (Dead-lettered = `enqueuedAt IS NULL && attempts >= 5`.)
+- [ ] **Throttle the remaining state-changing admin endpoints.** Apply `@Throttle({ default: { limit: 30, ttl: 60_000 } })` (matching the inquiry-transition / blocked-dates risk class) on: `POST /api/v1/blocked-dates`, `DELETE /api/v1/blocked-dates/:id`, `POST /api/v1/admin/inquiries/:id/transition`, `POST /api/v1/admin/inquiries/:id/convert`, `PATCH /api/v1/property`. Extend `rate-limit.e2e-spec.ts` to cover at least one of these new limits.
+- [ ] **MailerSend prod boot guard.** In `apps/api/src/config/env.ts`, when `EMAIL_PROVIDER === 'mailersend'`: require `MAILERSEND_API_KEY` AND `MAILERSEND_FROM_EMAIL` (or `EMAIL_FROM`) AND that the chosen from-address parses as `local@domain`. Throw at boot if missing. Existing dev defaults stay untouched.
+- [ ] **`modifyDates` outbox payload includes `guestName`** (and any other fields the email template references). Single-line fix in `BookingService.modifyDates()` outbox writer.
+- [ ] **Parallel-cancel race test.** New e2e in `booking.e2e-spec.ts`: confirmed booking, two `POST /:id/cancel` requests fired in parallel, exactly one returns 200 and the other returns 409 `CONFLICT`. Verifies the existing transactional status guard.
+- [ ] `pnpm test:all` green.
+
+**Acceptance:** Guests get usable emails (address + dates + house-rules link). Operator can see when notifications dead-letter. All admin state-change endpoints have rate limits. MailerSend boot fails fast on missing config rather than silently throwing on first send. Race-condition behavior on cancel is regression-tested.
+
+---
+
+**Phase 1 done when:** all M1–M11 ✅ and the property can take a real direct booking from a guest **and actually deliver the email/SMS confirmation**.
 
 ### Inter-milestone fixes
 

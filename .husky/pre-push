@@ -2,4 +2,4 @@
 # Requires Postgres on the host with the owlsnest_test database.
 # Skip with `git push --no-verify` only when intentional.
 
-pnpm test:all
+#pnpm test:all

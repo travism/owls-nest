@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M10 merged; second-round gap analysis ran 2026-04-28 surfaced 6 missed items — see M11
-> **Next up:** M11 — guest-usable emails, outbox dead-letter visibility, remaining throttle gaps, MailerSend boot guard, race test
+> **Now:** ✅ Phase 1 complete (M1–M11). Direct-booking engine is end-to-end shippable.
+> **Next up:** Phase 2 — cleaner SMS waterfall, guest messaging, iCal import (multi-feed)
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-26 (after M10; 428 tests passing — shared 53, admin 20, web 45, api unit 200, api e2e 110)
+Last updated: 2026-04-28 (after M11; 445 tests passing — shared 53, admin 22, web 45, api unit 210, api e2e 115)
 
 ---
 
@@ -305,19 +305,19 @@ Lower-severity items from the same gap analysis.
 ---
 
 ### M11 — Phase 1 v2 gap fixes
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
-A second-round gap analysis (2026-04-28, after M10 merged to main) surfaced six items missed by the first round. Three are launch-critical (P0); three are tier-1 polish.
+A second-round gap analysis (2026-04-28, after M10 merged to main) surfaced six items missed by the first round. Three are launch-critical (P0); three are tier-1 polish. All shipped together in M11.
 
-- [ ] **Email templates carry the info a guest actually needs.** `bookingConfirmed` and `bookingPaymentLink` currently include only the booking ID + total. Expand both payloads + templates to include check-in / check-out dates, the property address (`Property.addressLine1, city, state postalCode`), check-in time, and a link to the house-rules page. Update the BookingService outbox writers to include those fields.
-- [ ] **Outbox dead-letter visibility.** Add `GET /api/v1/admin/outbox-health` returning `{ deadLettered: count, oldestDeadLetterAt: iso, recent: [{id, jobName, idempotencyKey, attempts, failureReason, createdAt}] }`. AdminSessionGuard. Add admin SPA card on the Dashboard linking to a small Outbox page that lists dead-lettered rows. (Dead-lettered = `enqueuedAt IS NULL && attempts >= 5`.)
-- [ ] **Throttle the remaining state-changing admin endpoints.** Apply `@Throttle({ default: { limit: 30, ttl: 60_000 } })` (matching the inquiry-transition / blocked-dates risk class) on: `POST /api/v1/blocked-dates`, `DELETE /api/v1/blocked-dates/:id`, `POST /api/v1/admin/inquiries/:id/transition`, `POST /api/v1/admin/inquiries/:id/convert`, `PATCH /api/v1/property`. Extend `rate-limit.e2e-spec.ts` to cover at least one of these new limits.
-- [ ] **MailerSend prod boot guard.** In `apps/api/src/config/env.ts`, when `EMAIL_PROVIDER === 'mailersend'`: require `MAILERSEND_API_KEY` AND `MAILERSEND_FROM_EMAIL` (or `EMAIL_FROM`) AND that the chosen from-address parses as `local@domain`. Throw at boot if missing. Existing dev defaults stay untouched.
-- [ ] **`modifyDates` outbox payload includes `guestName`** (and any other fields the email template references). Single-line fix in `BookingService.modifyDates()` outbox writer.
-- [ ] **Parallel-cancel race test.** New e2e in `booking.e2e-spec.ts`: confirmed booking, two `POST /:id/cancel` requests fired in parallel, exactly one returns 200 and the other returns 409 `CONFLICT`. Verifies the existing transactional status guard.
-- [ ] `pnpm test:all` green.
+- [x] **Email templates carry the info a guest actually needs.** `bookingConfirmed` and `bookingPaymentLink` payloads + templates now include check-in/out dates, nights, property name + address, check-in time, total paid, and a link to the house-rules page (`${WEB_BASE_URL}/house-rules`). Subjects updated to `Your reservation at The Owl's Nest is confirmed — {checkIn}` and `Complete your reservation — payment link inside`. Payment-link email also surfaces the 24-hour Stripe Checkout expiry. `BookingService.approve()` and `handleCheckoutSucceeded()` extended to load the Property record and pass those fields through; `OutboxDrainService` dispatch entries forward them to the templates.
+- [x] **Outbox dead-letter visibility.** New `GET /api/v1/admin/outbox-health` (AdminSessionGuard) returning `{ deadLettered, pending, oldestDeadLetterAt, recent: [...] }`. New admin SPA page `/outbox` (`OutboxHealth.tsx`) lists dead-lettered rows in a table; Dashboard now shows a card with the live count via the same `useQuery` pattern used by other pages. Dead-lettered = `enqueuedAt IS NULL && attempts >= 5`.
+- [x] **Throttle remaining state-changing admin endpoints.** Added `@Throttle({ default: { limit: 30, ttl: 60_000 } })` on `POST /api/v1/blocked-dates`, `DELETE /api/v1/blocked-dates/:id`, `POST /api/v1/admin/inquiries/:id/transition`, `POST /api/v1/admin/inquiries/:id/convert`, `PATCH /api/v1/property`. `rate-limit.e2e-spec.ts` extended with a PATCH-property 31st-call → 429 case to prove the new throttle is wired.
+- [x] **MailerSend prod boot guard.** `loadEnv()` now throws at boot when `EMAIL_PROVIDER=mailersend` AND any of `MAILERSEND_API_KEY` / `MAILERSEND_FROM_EMAIL` (or `EMAIL_FROM`) is missing OR the chosen from-address fails `^[^@\s]+@[^@\s]+$`. Error message names the missing variable. New unit spec `apps/api/src/config/env.spec.ts` covers each branch.
+- [x] **`modifyDates` outbox payload includes `guestName`** (plus `guestEmail` for parity with sibling outbox rows; `delta` is now sent as `Math.abs()` so the template renders the right magnitude regardless of direction).
+- [x] **Parallel-cancel race test.** New e2e in `booking.e2e-spec.ts`: confirmed booking, two `POST /:id/cancel` in parallel via `Promise.all`. Asserts exactly one 200 + one 409 `CONFLICT` with `details.currentStatus === 'cancelled'`, and `fakeStripe.refunds.length` increments by exactly 1. To make the race deterministic, `BookingService.cancel()` now claims the cancellation up-front via `prisma.booking.updateMany({ where: { id, status: { in: ['approved', 'confirmed'] } } })` before issuing the Stripe refund — the loser's `count === 0` triggers `ConflictException`, so no Stripe call is made on the losing branch.
+- [x] `pnpm test:all` green (445 tests; +17 from M10).
 
-**Acceptance:** Guests get usable emails (address + dates + house-rules link). Operator can see when notifications dead-letter. All admin state-change endpoints have rate limits. MailerSend boot fails fast on missing config rather than silently throwing on first send. Race-condition behavior on cancel is regression-tested.
+**Acceptance:** Guests get usable emails (address + dates + house-rules link). Operator can see when notifications dead-letter. All admin state-change endpoints have rate limits. MailerSend boot fails fast on missing config. Race-condition behavior on cancel is regression-tested.
 
 ---
 

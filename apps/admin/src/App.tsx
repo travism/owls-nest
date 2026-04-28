@@ -10,6 +10,7 @@ import { BlockedDatesPage } from './pages/BlockedDates';
 import { InquiriesPage } from './pages/Inquiries';
 import { BookingsPage } from './pages/Bookings';
 import { BookingDetailPage } from './pages/BookingDetail';
+import { OutboxHealthPage } from './pages/OutboxHealth';
 
 export function App() {
   return (
@@ -63,6 +64,14 @@ export function App() {
         element={
           <AuthBoundary>
             <BookingDetailPage />
+          </AuthBoundary>
+        }
+      />
+      <Route
+        path="/outbox"
+        element={
+          <AuthBoundary>
+            <OutboxHealthPage />
           </AuthBoundary>
         }
       />

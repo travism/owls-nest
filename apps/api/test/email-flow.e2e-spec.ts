@@ -95,7 +95,9 @@ describe('Email flow via outbox drain (e2e)', () => {
     await drain.tick();
 
     const guestSends = fakeEmail.sent.filter((m) => m.to === 'jane@example.com');
-    const paymentEmail = guestSends.find((m) => /complete payment/i.test(m.subject));
+    const paymentEmail = guestSends.find((m) =>
+      /complete (payment|your reservation)/i.test(m.subject),
+    );
     expect(paymentEmail).toBeTruthy();
     expect(paymentEmail!.html).toContain('checkout.stripe.test');
   });

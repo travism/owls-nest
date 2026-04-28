@@ -1,12 +1,20 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { authApi } from '../lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { authApi, outboxApi } from '../lib/api';
 import { useAuth } from '../auth/AuthBoundary';
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+
+  // M11: surface dead-lettered notifications so the operator sees them
+  // without having to navigate. Errors are silent — Outbox health is a
+  // nice-to-have, not a critical-path read.
+  const outboxHealth = useQuery({
+    queryKey: ['outbox-health'],
+    queryFn: () => outboxApi.health(),
+  });
 
   const logout = useMutation({
     mutationFn: () => authApi.logout(),
@@ -46,6 +54,14 @@ export function DashboardPage() {
           <Link to="/blocked-dates">Blocked dates</Link>
           <span className="muted" style={{ marginLeft: '0.5rem' }}>
             — owner stays, maintenance windows, OTA-imported blocks
+          </span>
+        </li>
+        <li style={{ padding: '0.5rem 0' }}>
+          <Link to="/outbox">Outbox health</Link>
+          <span className="muted" style={{ marginLeft: '0.5rem' }}>
+            — {outboxHealth.data
+              ? `${outboxHealth.data.deadLettered} dead-lettered`
+              : 'notifications status'}
           </span>
         </li>
       </ul>

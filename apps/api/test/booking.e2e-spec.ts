@@ -332,6 +332,41 @@ describe('Booking lifecycle (e2e)', () => {
       expect(Number(res.body.refundAmount)).toBeCloseTo(331.5);
     });
 
+    it('parallel cancels: exactly one wins (200), other gets 409 CONFLICT, only one refund issued', async () => {
+      // M11: race-condition regression test. Two concurrent cancels used to
+      // both read `confirmed`, both refund via Stripe, and both flip the
+      // booking. The conditional updateMany() in BookingService.cancel()
+      // turns the loser's claim into count=0 → ConflictException.
+      const client = new TestClient(server);
+      const creds = await enrollAdmin(prisma);
+      await signIn(client, creds);
+      const { bookingId } = await setupConfirmedBooking(client);
+      // Push check-in 60 days out so the cancellation tier is 100%
+      // (full refund — proves the winning call did call Stripe once).
+      const checkIn = new Date(Date.now() + 60 * 86400000);
+      checkIn.setUTCHours(0, 0, 0, 0);
+      const checkOut = new Date(checkIn.getTime() + 3 * 86400000);
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { checkIn, checkOut },
+      });
+      const refundsBefore = fakeStripe.refunds.length;
+
+      const [r1, r2] = await Promise.all([
+        client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {}),
+        client.post(`/api/v1/admin/bookings/${bookingId}/cancel`, {}),
+      ]);
+      const statuses = [r1.status, r2.status].sort();
+      expect(statuses).toEqual([201, 409]);
+
+      const conflict = r1.status === 409 ? r1 : r2;
+      expect(conflict.body.error.code).toBe('CONFLICT');
+      expect(conflict.body.error.details?.currentStatus).toBe('cancelled');
+
+      // Only ONE Stripe refund — the loser must not have double-charged.
+      expect(fakeStripe.refunds.length).toBe(refundsBefore + 1);
+    });
+
     it('within 14 days: 0% refund, no Stripe call', async () => {
       const client = new TestClient(server);
       const creds = await enrollAdmin(prisma);

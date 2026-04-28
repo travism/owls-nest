@@ -10,7 +10,7 @@
 // 429 RATE_LIMITED in the standard envelope.
 
 import 'reflect-metadata';
-import { Controller, Get, Module, Post } from '@nestjs/common';
+import { Body, Controller, Get, Module, Patch, Post } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import {
@@ -50,13 +50,25 @@ class AdminBookingThrottleStub {
   }
 }
 
+// M11: stub for PATCH /api/v1/property — mirrors the real @Throttle limit
+// (30/60s) applied in property.controller.ts so the e2e proves the new
+// throttle is wired without booting the full app module.
+@Controller('api/v1/property')
+class PropertyThrottleStub {
+  @Patch()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  update(@Body() _body: unknown) {
+    return { ok: true };
+  }
+}
+
 @Module({
   imports: [
     ThrottlerModule.forRoot([
       { name: 'default', ttl: seconds(60), limit: 5 },
     ]),
   ],
-  controllers: [ThrottleTestController, AdminBookingThrottleStub],
+  controllers: [ThrottleTestController, AdminBookingThrottleStub, PropertyThrottleStub],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 class TestThrottlerAppModule {}
@@ -113,6 +125,21 @@ describe('Rate limiting (e2e)', () => {
     const overflow = await request(server).post(
       `/api/v1/admin/bookings/${id}/approve`,
     );
+    expect(overflow.status).toBe(429);
+    expect(overflow.body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('throttles PATCH /api/v1/property at 30/60s — 31st call returns 429 RATE_LIMITED', async () => {
+    // M11: defense-in-depth on the property settings endpoint.
+    for (let i = 1; i <= 30; i++) {
+      const res = await request(server)
+        .patch('/api/v1/property')
+        .send({ name: `Test ${i}` });
+      expect(res.status).toBeLessThan(300);
+    }
+    const overflow = await request(server)
+      .patch('/api/v1/property')
+      .send({ name: 'overflow' });
     expect(overflow.status).toBe(429);
     expect(overflow.body.error.code).toBe('RATE_LIMITED');
   });

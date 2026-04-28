@@ -58,10 +58,60 @@ describe('email templates', () => {
     expect(r.html).toContain('$663.00');
   });
 
+  // M11: payment-link email must carry property + dates + house rules so
+  // the guest knows what they're paying for and how long the link lasts.
+  it('bookingPaymentLink (M11) renders address, check-in time, house rules, expiry', () => {
+    const r = bookingPaymentLink({
+      bookingId: 'b1',
+      chargeId: 'c1',
+      guestName: 'Jane',
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-18',
+      numNights: 3,
+      amount: 663,
+      checkoutUrl: 'https://checkout.stripe.com/abc',
+      propertyName: "The Owl's Nest",
+      propertyAddress: '147 SW 4th St, Redmond, OR 97756',
+      checkInTime: '3:00 PM',
+      houseRulesUrl: 'http://localhost:4321/house-rules',
+    });
+    expect(r.subject).toBe('Complete your reservation — payment link inside');
+    expect(r.html).toContain('147 SW 4th St');
+    expect(r.html).toContain('3:00 PM');
+    expect(r.html).toContain('/house-rules');
+    expect(r.html).toMatch(/expires in 24 hours/i);
+    expect(r.html).toContain('3 nights');
+  });
+
   it('bookingConfirmed includes booking id', () => {
     const r = bookingConfirmed({ bookingId: 'b1', chargeId: 'c1', guestName: 'Jane' });
     expect(r.subject).toMatch(/confirmed/i);
     expect(r.html).toContain('b1');
+  });
+
+  // M11: confirmation email must carry the same trip-card info.
+  it('bookingConfirmed (M11) renders dates, address, check-in time, house rules', () => {
+    const r = bookingConfirmed({
+      bookingId: 'b1',
+      chargeId: 'c1',
+      guestName: 'Jane',
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-18',
+      numNights: 3,
+      totalPaid: 663,
+      propertyName: "The Owl's Nest",
+      propertyAddress: '147 SW 4th St, Redmond, OR 97756',
+      checkInTime: '3:00 PM',
+      houseRulesUrl: 'http://localhost:4321/house-rules',
+    });
+    expect(r.subject).toBe(
+      "Your reservation at The Owl's Nest is confirmed — 2026-07-15",
+    );
+    expect(r.html).toContain('147 SW 4th St');
+    expect(r.html).toContain('3:00 PM');
+    expect(r.html).toContain('/house-rules');
+    expect(r.html).toContain('$663.00');
+    expect(r.html).toContain('3 nights');
   });
 
   it('bookingDeclined renders reason when present', () => {

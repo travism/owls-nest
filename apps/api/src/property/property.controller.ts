@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Patch, Req, UseGuards, UsePipes } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { PropertyUpdateSchema } from '@owlsnest/shared';
 import type { z } from 'zod';
@@ -8,6 +9,16 @@ import { AuditService } from '../auth/audit.service';
 import { PropertyService } from './property.service';
 
 type UpdateBody = z.infer<typeof PropertyUpdateSchema>;
+
+// M11: rate-limit property settings updates. 30/60s. TEST_MULTIPLIER bumps
+// 1000x in tests so other suites don't trip; rate-limit.e2e-spec.ts drives
+// this endpoint directly to verify the real limit.
+const ADMIN_WRITE_THROTTLE = {
+  default: {
+    limit: 30 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+    ttl: 60_000,
+  },
+};
 
 function ipOf(req: Request): string | null {
   return (req.ip ?? req.socket?.remoteAddress) ?? null;
@@ -37,6 +48,7 @@ export class PropertyController {
    */
   @Patch()
   @UseGuards(AdminSessionGuard)
+  @Throttle(ADMIN_WRITE_THROTTLE)
   @UsePipes(new ZodValidationPipe(PropertyUpdateSchema))
   async update(@Body() body: UpdateBody, @Req() req: RequestWithAdmin) {
     const before = await this.property.getProperty();

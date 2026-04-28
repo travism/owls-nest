@@ -104,6 +104,35 @@ export interface RefundResult {
 
 const SUCCESS_URL_DEFAULT = 'http://localhost:4321/book/thanks';
 const CANCEL_URL_DEFAULT = 'http://localhost:4321/book';
+const WEB_BASE_URL_DEFAULT = 'http://localhost:4321';
+
+// M11: Build a single-line postal address string for guest-facing emails.
+// Pulls from Property fields populated in seed/admin updates.
+function formatPropertyAddress(p: {
+  addressLine1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}): string {
+  return `${p.addressLine1}, ${p.city}, ${p.state} ${p.postalCode}`;
+}
+
+// M11: Format a 24-hour HH:MM:SS check-in time as a friendly "3:00 PM".
+// Property.checkInTime is stored as VARCHAR(8) per schema.
+function formatCheckInTime(s: string | null | undefined): string | undefined {
+  if (!s) return undefined;
+  const m = /^(\d{1,2}):(\d{2})/.exec(s);
+  if (!m) return s;
+  const h = Number(m[1]);
+  const mins = m[2];
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = ((h + 11) % 12) + 1;
+  return mins === '00' ? `${h12}:${mins} ${period}` : `${h12}:${mins} ${period}`;
+}
+
+function webBaseUrl(): string {
+  return process.env.WEB_BASE_URL ?? WEB_BASE_URL_DEFAULT;
+}
 
 @Injectable()
 export class BookingService {
@@ -211,7 +240,9 @@ export class BookingService {
   async approve(bookingId: string): Promise<ApprovalResult> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { guest: true, charges: true },
+      // M11: include property so the outbox payload can carry address +
+      // check-in time + property name into the guest-facing payment-link email.
+      include: { guest: true, charges: true, property: true },
     });
     if (!booking) {
       throw new NotFoundException({ code: 'NOT_FOUND', message: 'Booking not found.' });
@@ -319,6 +350,16 @@ export class BookingService {
       // Outbox row: drained asynchronously by OutboxDrainService.
       // Side effects (email/SMS/rebuild) fire from the drain, not here.
       // See docs/DECISION-LOG.md D-019 + D-022.
+      // M11: include property + check-in metadata so the guest sees address
+      // and check-in time in the payment-link email.
+      const property = (booking as any).property as {
+        name: string;
+        addressLine1: string;
+        city: string;
+        state: string;
+        postalCode: string;
+        checkInTime: string;
+      } | null;
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -332,8 +373,14 @@ export class BookingService {
             guestName: booking.guest!.name,
             checkIn: toISODate(booking.checkIn),
             checkOut: toISODate(booking.checkOut),
+            numNights: booking.numNights,
             amount: Number(booking.subtotal) + Number(booking.totalTaxAmount),
+            totalPaid: Number(booking.subtotal) + Number(booking.totalTaxAmount),
             currency: 'usd',
+            propertyName: property?.name ?? null,
+            propertyAddress: property ? formatPropertyAddress(property) : null,
+            checkInTime: formatCheckInTime(property?.checkInTime) ?? null,
+            houseRulesUrl: `${webBaseUrl()}/house-rules`,
           } as unknown as Prisma.InputJsonValue,
           idempotencyKey: `booking.approved:${booking.id}:${charge.id}`,
         },
@@ -368,7 +415,9 @@ export class BookingService {
   }): Promise<{ chargeId: string; bookingId: string } | null> {
     const charge = await this.prisma.bookingCharge.findUnique({
       where: { stripeCheckoutSessionId: params.sessionId },
-      include: { booking: { include: { guest: true } } },
+      // M11: include property so the confirmation email carries address +
+      // check-in time + house-rules link to the guest.
+      include: { booking: { include: { guest: true, property: true } } },
     });
     if (!charge) return null;
     if (charge.status === 'succeeded') {
@@ -412,6 +461,19 @@ export class BookingService {
       // Outbox row: drained asynchronously by OutboxDrainService.
       // Side effects (email/SMS/rebuild) fire from the drain, not here.
       // See docs/DECISION-LOG.md D-019 + D-022.
+      // M11: include property + dates so the confirmation email is a
+      // self-contained trip card (dates, address, check-in time, rules link).
+      const bk = charge.booking as any;
+      const property = bk?.property as
+        | {
+            name: string;
+            addressLine1: string;
+            city: string;
+            state: string;
+            postalCode: string;
+            checkInTime: string;
+          }
+        | null;
       await tx.outbox.create({
         data: {
           jobName: 'guest-notification',
@@ -421,7 +483,15 @@ export class BookingService {
             chargeId: charge.id,
             guestName: charge.booking?.guest?.name ?? null,
             guestEmail: charge.booking?.guest?.email ?? null,
+            checkIn: bk?.checkIn ? toISODate(bk.checkIn) : null,
+            checkOut: bk?.checkOut ? toISODate(bk.checkOut) : null,
+            numNights: bk?.numNights ?? null,
             amount: Number(charge.amount),
+            totalPaid: Number(charge.amount),
+            propertyName: property?.name ?? null,
+            propertyAddress: property ? formatPropertyAddress(property) : null,
+            checkInTime: formatCheckInTime(property?.checkInTime) ?? null,
+            houseRulesUrl: `${webBaseUrl()}/house-rules`,
           } as unknown as Prisma.InputJsonValue,
           idempotencyKey: `booking.confirmed:${charge.id}`,
         },
@@ -543,6 +613,30 @@ export class BookingService {
     const initial = (booking.charges ?? []).find(
       (c: any) => c.kind === 'initial',
     );
+
+    // M11: Race-safe status flip — claim the cancellation BEFORE any external
+    // side-effect (Stripe refund). Conditional updateMany returns count=0 when
+    // another concurrent request already flipped the row out of approved/
+    // confirmed; we throw 409 so the loser doesn't double-refund.
+    const claim = await this.prisma.booking.updateMany({
+      where: {
+        id: booking.id,
+        status: { in: ['approved', 'confirmed'] },
+      },
+      data: {
+        status: 'cancelled',
+        cancellationTierApplied: tierLabel,
+        cancelledAt: new Date(),
+      },
+    });
+    if (claim.count === 0) {
+      throw new ConflictException({
+        code: 'CONFLICT',
+        message: 'Booking is already cancelled.',
+        details: { currentStatus: 'cancelled' },
+      });
+    }
+
     let refundAmountDollars = 0;
     let refundedChargeUpdate: { id: string; refundedAmount: number; fullyRefunded: boolean } | null = null;
     if (
@@ -574,6 +668,12 @@ export class BookingService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      // Stamp the refundAmount onto the booking (status was already flipped
+      // above; this is a follow-up update for the audit trail).
+      await tx.booking.update({
+        where: { id: booking.id },
+        data: { refundAmount: refundAmountDollars },
+      });
       if (refundedChargeUpdate) {
         await tx.bookingCharge.update({
           where: { id: refundedChargeUpdate.id },
@@ -584,15 +684,6 @@ export class BookingService {
           },
         });
       }
-      await tx.booking.update({
-        where: { id: booking.id },
-        data: {
-          status: 'cancelled',
-          cancellationTierApplied: tierLabel,
-          refundAmount: refundAmountDollars,
-          cancelledAt: new Date(),
-        },
-      });
       // Outbox row: drained asynchronously by OutboxDrainService.
       // Side effects (email/SMS/rebuild) fire from the drain, not here.
       // See docs/DECISION-LOG.md D-019 + D-022.
@@ -753,9 +844,13 @@ export class BookingService {
           payload: {
             event: 'booking.dates_modified',
             bookingId: booking.id,
+            // M11: guestName so the email greets the guest by name; existing
+            // template falls back to "there" when missing.
+            guestName: booking.guest?.name ?? null,
+            guestEmail: booking.guest?.email ?? null,
             checkIn: input.checkIn,
             checkOut: input.checkOut,
-            delta: deltaDollars,
+            delta: Math.abs(deltaDollars),
             direction,
             refundIssued,
           } as unknown as Prisma.InputJsonValue,

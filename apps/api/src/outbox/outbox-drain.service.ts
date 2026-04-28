@@ -71,16 +71,32 @@ const TEMPLATES: Record<string, (p: any) => RenderedEmail> = {
       guestName: p.guestName,
       checkIn: p.checkIn ?? '',
       checkOut: p.checkOut ?? '',
+      numNights: p.numNights,
       amount: Number(p.amount ?? 0),
+      totalPaid: p.totalPaid,
       currency: p.currency,
       checkoutUrl: p.checkoutUrl,
+      // M11: property metadata + house rules link forwarded from BookingService
+      propertyName: p.propertyName,
+      propertyAddress: p.propertyAddress,
+      checkInTime: p.checkInTime,
+      houseRulesUrl: p.houseRulesUrl,
     }),
   'booking.confirmed': (p) =>
     bookingConfirmed({
       bookingId: p.bookingId,
       chargeId: p.chargeId,
       guestName: p.guestName,
+      checkIn: p.checkIn,
+      checkOut: p.checkOut,
+      numNights: p.numNights,
       amount: p.amount,
+      totalPaid: p.totalPaid,
+      // M11: property metadata + house rules link
+      propertyName: p.propertyName,
+      propertyAddress: p.propertyAddress,
+      checkInTime: p.checkInTime,
+      houseRulesUrl: p.houseRulesUrl,
     }),
   'booking.declined': (p) =>
     bookingDeclined({

@@ -155,6 +155,17 @@ function buildPrisma() {
       Object.assign(b, data, { updatedAt: now() });
       return b;
     }),
+    // M11: BookingService.cancel() uses updateMany() with a status filter
+    // for race-safe cancellation. Mock honors the status `in` filter so the
+    // unit tests can exercise the conditional-update path.
+    updateMany: jest.fn(async ({ where, data }: any) => {
+      const b = bookings.find((x) => x.id === where.id);
+      if (!b) return { count: 0 };
+      const allowed: string[] | undefined = where.status?.in;
+      if (allowed && !allowed.includes(b.status)) return { count: 0 };
+      Object.assign(b, data, { updatedAt: now() });
+      return { count: 1 };
+    }),
     findMany: jest.fn(async (args: any) => {
       let result = bookings.slice();
       if (args?.where?.status) result = result.filter((b) => b.status === args.where.status);

@@ -6,9 +6,11 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { OutboxDrainService } from './outbox-drain.service';
+import { OutboxController } from './outbox.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot()],
+  controllers: [OutboxController],
   providers: [OutboxDrainService],
   exports: [OutboxDrainService],
 })

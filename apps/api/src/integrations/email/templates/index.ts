@@ -88,32 +88,92 @@ export interface BookingPaymentLinkPayload {
   guestName?: string;
   checkIn: string;
   checkOut: string;
+  numNights?: number;
   amount: number;
+  totalPaid?: number;
   currency?: string;
   checkoutUrl: string;
+  propertyName?: string;
+  propertyAddress?: string;
+  checkInTime?: string;
+  houseRulesUrl?: string;
 }
 
+// M11: payment-link email expanded to include property + dates + house-rules
+// link so the guest knows exactly what they're paying for. Stripe Checkout
+// Sessions expire after 24 hours by default — surface that to set expectations.
 export function bookingPaymentLink(p: BookingPaymentLinkPayload): RenderedEmail {
-  return wrap('Your booking is approved — please complete payment', [
+  const property = p.propertyName ?? "The Owl's Nest";
+  const nightsLine =
+    p.numNights != null
+      ? `${escapeHtml(dateRange(p.checkIn, p.checkOut))} (${p.numNights} night${p.numNights === 1 ? '' : 's'})`
+      : escapeHtml(dateRange(p.checkIn, p.checkOut));
+  const lines = [
     `Hi ${escapeHtml(p.guestName ?? 'there')},`,
-    `Your stay for ${escapeHtml(dateRange(p.checkIn, p.checkOut))} has been approved. To confirm the booking, please complete payment of ${fmtMoney(p.amount, p.currency)}.`,
+    `Your stay at ${escapeHtml(property)} for ${nightsLine} has been approved. To confirm the booking, please complete payment of ${fmtMoney(p.amount, p.currency)}.`,
     `<a href="${escapeHtml(p.checkoutUrl)}">Pay securely with Stripe</a>`,
-  ]);
+    'This payment link expires in 24 hours (Stripe Checkout default).',
+  ];
+  if (p.propertyAddress) lines.push(`Property: ${escapeHtml(p.propertyAddress)}`);
+  if (p.checkInTime) lines.push(`Check-in time: ${escapeHtml(p.checkInTime)}`);
+  if (p.houseRulesUrl) {
+    lines.push(
+      `House rules: <a href="${escapeHtml(p.houseRulesUrl)}">${escapeHtml(p.houseRulesUrl)}</a>`,
+    );
+  }
+  return {
+    ...wrap('Complete your reservation — payment link inside', lines),
+    subject: 'Complete your reservation — payment link inside',
+  };
 }
 
 export interface BookingConfirmedPayload {
   bookingId: string;
   chargeId: string;
   guestName?: string;
+  checkIn?: string;
+  checkOut?: string;
+  numNights?: number;
+  totalPaid?: number;
   amount?: number;
+  propertyName?: string;
+  propertyAddress?: string;
+  checkInTime?: string;
+  houseRulesUrl?: string;
 }
 
+// M11: confirmation email expanded to be a guest-usable trip card —
+// dates, address, check-in time, and a link to house rules.
 export function bookingConfirmed(p: BookingConfirmedPayload): RenderedEmail {
-  return wrap('Booking confirmed', [
-    `Hi ${escapeHtml(p.guestName ?? 'there')},`,
-    'Your payment was received and your booking is confirmed. We look forward to hosting you.',
-    `Booking ID: <code>${escapeHtml(p.bookingId)}</code>`,
-  ]);
+  const property = p.propertyName ?? "The Owl's Nest";
+  const subject = p.checkIn
+    ? `Your reservation at The Owl's Nest is confirmed — ${p.checkIn}`
+    : "Your reservation at The Owl's Nest is confirmed";
+  const lines = [`Hi ${escapeHtml(p.guestName ?? 'there')},`];
+  if (p.checkIn && p.checkOut) {
+    const nights =
+      p.numNights != null
+        ? ` (${p.numNights} night${p.numNights === 1 ? '' : 's'})`
+        : '';
+    lines.push(
+      `Your reservation at ${escapeHtml(property)} for ${escapeHtml(dateRange(p.checkIn, p.checkOut))}${nights} is confirmed.`,
+    );
+  } else {
+    lines.push(
+      `Your payment was received and your reservation at ${escapeHtml(property)} is confirmed.`,
+    );
+  }
+  const total = p.totalPaid ?? p.amount;
+  if (total != null) lines.push(`Total paid: ${fmtMoney(total)}`);
+  if (p.propertyAddress) lines.push(`Property: ${escapeHtml(p.propertyAddress)}`);
+  if (p.checkInTime) lines.push(`Check-in time: ${escapeHtml(p.checkInTime)}`);
+  if (p.houseRulesUrl) {
+    lines.push(
+      `Please review the house rules before arrival: <a href="${escapeHtml(p.houseRulesUrl)}">${escapeHtml(p.houseRulesUrl)}</a>`,
+    );
+  }
+  lines.push(`Booking ID: <code>${escapeHtml(p.bookingId)}</code>`);
+  return { ...wrap(subject, lines), subject };
 }
 
 export interface BookingDeclinedPayload {

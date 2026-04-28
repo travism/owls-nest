@@ -26,6 +26,15 @@ const TransitionBodySchema = z.object({
   status: z.enum(['responded', 'closed']),
 });
 
+// M11: rate-limit admin transition/convert. 30/60s — defense-in-depth on
+// top of session auth. TEST_MULTIPLIER bumps 1000x in tests.
+const ADMIN_WRITE_THROTTLE = {
+  default: {
+    limit: 30 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+    ttl: 60_000,
+  },
+};
+
 function ipOf(req: Request): string | null {
   return (req.ip ?? req.socket?.remoteAddress) ?? null;
 }
@@ -84,6 +93,7 @@ export class AdminInquiryController {
   }
 
   @Post(':id/transition')
+  @Throttle(ADMIN_WRITE_THROTTLE)
   async transition(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(TransitionBodySchema))
@@ -106,6 +116,7 @@ export class AdminInquiryController {
   }
 
   @Post(':id/convert')
+  @Throttle(ADMIN_WRITE_THROTTLE)
   async convert(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: RequestWithAdmin,

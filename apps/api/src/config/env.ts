@@ -51,7 +51,9 @@ const EnvSchema = z.object({
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM_NUMBER: z.string().optional(),
   MAILERSEND_API_KEY: z.string().optional(),
-  MAILERSEND_FROM_EMAIL: z.string().email().optional(),
+  // M11: validation deferred to assertMailerSendConfig() so the boot guard
+  // owns the error message. (Was z.string().email().optional().)
+  MAILERSEND_FROM_EMAIL: z.string().optional(),
 
   // Email adapter selection (M9 / D-021)
   EMAIL_PROVIDER: z.enum(['mailhog', 'mailersend', 'fake']).optional(),
@@ -61,6 +63,11 @@ const EnvSchema = z.object({
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   PRICELABS_API_KEY: z.string().optional(),
   PRICELABS_LISTING_ID: z.string().optional(),
+
+  // M11: public site base URL — used by BookingService when assembling
+  // guest-facing house-rules links in outbox payloads. Defaults to the
+  // local Astro dev port; override in prod with the live domain.
+  WEB_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -94,5 +101,36 @@ export function loadEnv(): Env {
     }
   }
 
+  // M11: MailerSend boot guard. When EMAIL_PROVIDER=mailersend (the production
+  // path per D-021), fail fast at boot if the API key is missing or the
+  // from-address isn't a valid local@domain. The previous behavior was to
+  // silently throw on the first send attempt which only surfaces in production
+  // after the first email tries to leave.
+  assertMailerSendConfig(parsed.data);
+
   return parsed.data;
+}
+
+function assertMailerSendConfig(env: Env): void {
+  if (env.EMAIL_PROVIDER !== 'mailersend') return;
+  const errors: string[] = [];
+  if (!env.MAILERSEND_API_KEY) {
+    errors.push('MAILERSEND_API_KEY is required when EMAIL_PROVIDER=mailersend');
+  }
+  const fromEmail = env.MAILERSEND_FROM_EMAIL ?? env.EMAIL_FROM;
+  if (!fromEmail) {
+    errors.push(
+      'MAILERSEND_FROM_EMAIL (or EMAIL_FROM) is required when EMAIL_PROVIDER=mailersend',
+    );
+  } else if (!/^[^@\s]+@[^@\s]+$/.test(fromEmail)) {
+    errors.push(
+      `MAILERSEND_FROM_EMAIL/EMAIL_FROM "${fromEmail}" is not a valid email address`,
+    );
+  }
+  if (errors.length > 0) {
+    console.error('Invalid MailerSend configuration:');
+    for (const e of errors) console.error(`  - ${e}`);
+    // Throw rather than process.exit so unit tests can assert the message.
+    throw new Error(`MailerSend boot guard failed: ${errors.join('; ')}`);
+  }
 }

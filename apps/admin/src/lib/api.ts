@@ -282,6 +282,29 @@ export const bookingsApi = {
     }),
 };
 
+// ----- Outbox health (M11) -----
+
+export interface OutboxHealthRow {
+  id: string;
+  jobName: string;
+  idempotencyKey: string | null;
+  attempts: number;
+  failureReason: string | null;
+  createdAt: string;
+  failedAt: string | null;
+}
+
+export interface OutboxHealth {
+  deadLettered: number;
+  pending: number;
+  oldestDeadLetterAt: string | null;
+  recent: OutboxHealthRow[];
+}
+
+export const outboxApi = {
+  health: () => api.get<OutboxHealth>('/api/v1/admin/outbox-health'),
+};
+
 export const inquiriesApi = {
   list: (status?: InquiryStatus) =>
     api.get<AdminInquiry[]>(

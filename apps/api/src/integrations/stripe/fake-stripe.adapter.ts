@@ -10,11 +10,13 @@ import { Injectable } from '@nestjs/common';
 import type {
   CreateCheckoutSessionInput,
   CreateCustomerInput,
+  CreateRefundInput,
   StripeAdapter,
   StripeBalanceTransaction,
   StripeCheckoutSession,
   StripeCustomer,
   StripePaymentIntent,
+  StripeRefund,
   StripeWebhookEvent,
 } from './stripe.types';
 
@@ -35,6 +37,11 @@ export class FakeStripeAdapter implements StripeAdapter {
   readonly sessions = new Map<string, FakeSession>();
   readonly paymentIntents = new Map<string, StripePaymentIntent>();
   readonly balanceTransactions = new Map<string, StripeBalanceTransaction>();
+  readonly refunds: StripeRefund[] = [];
+
+  // Single-shot test helpers — set by tests to force the next call to throw.
+  failNextRefundWith: Error | null = null;
+  failNextSessionWith: Error | null = null;
 
   private id(prefix: string): string {
     return `${prefix}_${randomBytes(8).toString('hex')}`;
@@ -49,6 +56,11 @@ export class FakeStripeAdapter implements StripeAdapter {
   async createCheckoutSession(
     input: CreateCheckoutSessionInput,
   ): Promise<StripeCheckoutSession> {
+    if (this.failNextSessionWith) {
+      const err = this.failNextSessionWith;
+      this.failNextSessionWith = null;
+      throw err;
+    }
     const session: FakeSession = {
       id: this.id('cs_test'),
       url: `https://checkout.stripe.test/${this.id('p')}`,
@@ -89,6 +101,22 @@ export class FakeStripeAdapter implements StripeAdapter {
     id: string,
   ): Promise<StripeBalanceTransaction> {
     return this.balanceTransactions.get(id) ?? { id, fee: 0 };
+  }
+
+  async createRefund(input: CreateRefundInput): Promise<StripeRefund> {
+    if (this.failNextRefundWith) {
+      const err = this.failNextRefundWith;
+      this.failNextRefundWith = null;
+      throw err;
+    }
+    const refund: StripeRefund = {
+      id: this.id('re_test'),
+      amount: input.amountCents,
+      status: 'succeeded',
+      paymentIntentId: input.paymentIntentId,
+    };
+    this.refunds.push(refund);
+    return refund;
   }
 
   /**
@@ -141,6 +169,87 @@ export class FakeStripeAdapter implements StripeAdapter {
       paymentIntentId: session.paymentIntentId,
       chargeId,
       balanceTransactionId: btId,
+    };
+  }
+
+  /** Build a charge.dispute.created event (M9). */
+  buildDisputeCreatedEvent(
+    paymentIntentId: string,
+    reason: string,
+    amountCents = 50000,
+  ): { id: string; type: 'charge.dispute.created'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.dispute.created',
+      data: {
+        object: {
+          id: this.id('dp_test'),
+          object: 'dispute',
+          payment_intent: paymentIntentId,
+          reason,
+          amount: amountCents,
+          status: 'needs_response',
+        },
+      },
+    };
+  }
+
+  /** Build a charge.dispute.closed event (M9). */
+  buildDisputeClosedEvent(
+    paymentIntentId: string,
+    status: 'won' | 'lost' | 'warning_closed' = 'won',
+  ): { id: string; type: 'charge.dispute.closed'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.dispute.closed',
+      data: {
+        object: {
+          id: this.id('dp_test'),
+          object: 'dispute',
+          payment_intent: paymentIntentId,
+          status,
+        },
+      },
+    };
+  }
+
+  /** Build a charge.refunded event (M9). amountRefundedCents is the running total. */
+  buildChargeRefundedEvent(
+    paymentIntentId: string,
+    amountRefundedCents: number,
+    fullyRefunded = false,
+  ): { id: string; type: 'charge.refunded'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'charge.refunded',
+      data: {
+        object: {
+          id: this.id('ch_test'),
+          object: 'charge',
+          payment_intent: paymentIntentId,
+          amount_refunded: amountRefundedCents,
+          refunded: fullyRefunded,
+        },
+      },
+    };
+  }
+
+  /** Build a payment_intent.payment_failed event (M9). */
+  buildPaymentFailedEvent(
+    paymentIntentId: string,
+    reason = 'card_declined',
+  ): { id: string; type: 'payment_intent.payment_failed'; data: { object: Record<string, unknown> } } {
+    return {
+      id: this.id('evt_test'),
+      type: 'payment_intent.payment_failed',
+      data: {
+        object: {
+          id: paymentIntentId,
+          object: 'payment_intent',
+          status: 'requires_payment_method',
+          last_payment_error: { message: reason },
+        },
+      },
     };
   }
 

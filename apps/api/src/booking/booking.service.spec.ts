@@ -11,6 +11,13 @@ const PROPERTY = {
   baseNightlyRate: 175,
   cleaningFee: 75,
   minStay: 2,
+  cancellationPolicy: {
+    tiers: [
+      { daysBeforeCheckin: 30, refundPercent: 100 },
+      { daysBeforeCheckin: 14, refundPercent: 50 },
+      { daysBeforeCheckin: 0, refundPercent: 0 },
+    ],
+  },
 };
 
 interface InquiryRow {
@@ -47,6 +54,9 @@ interface BookingRow {
   cityTltAmount: number;
   totalTaxAmount: number;
   stripeCustomerId: string | null;
+  cancellationTierApplied: string | null;
+  refundAmount: number | null;
+  cancelledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -110,6 +120,7 @@ function buildPrisma() {
       const out: any = { ...b };
       if (include?.guest) out.guest = guests.find((g) => g.id === b.guestId) ?? null;
       if (include?.charges) out.charges = charges.filter((c) => c.bookingId === b.id);
+      if (include?.property) out.property = PROPERTY;
       return out;
     }),
     create: jest.fn(async ({ data }: any) => {
@@ -129,6 +140,9 @@ function buildPrisma() {
         cityTltAmount: data.cityTltAmount,
         totalTaxAmount: data.totalTaxAmount,
         stripeCustomerId: null,
+        cancellationTierApplied: null,
+        refundAmount: null,
+        cancelledAt: null,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -462,5 +476,353 @@ describe('BookingService.handleCheckoutSucceeded', () => {
       paymentIntentId: null,
     });
     expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------
+// M8 actions
+// ---------------------------------------------------------------
+
+async function setupConfirmed() {
+  const { svc, prisma, stripe } = buildSvc();
+  prisma.inquiries().push({ ...VALID_INQUIRY });
+  const booking = await svc.convertInquiry('inq-1');
+  const approve = await svc.approve(booking.id);
+  const charge = prisma.charges().find((c) => c.id === approve.chargeId)!;
+  const sessionId = charge.stripeCheckoutSessionId!;
+  const sim = stripe.simulatePaymentSucceeded(sessionId);
+  await svc.handleCheckoutSucceeded({
+    sessionId,
+    paymentIntentId: sim.paymentIntentId,
+  });
+  return { svc, prisma, stripe, bookingId: booking.id, chargeId: approve.chargeId };
+}
+
+describe('BookingService.decline', () => {
+  it('declines a pending_approval booking and writes outbox', async () => {
+    const { svc, prisma } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+
+    const result = await svc.decline(b.id, { reason: 'wrong dates' });
+
+    expect(result.status).toBe('cancelled');
+    expect(result.cancellationTierApplied).toBe('declined');
+    expect(prisma.outbox().some((o: any) => o.payload.event === 'booking.declined')).toBe(true);
+  });
+
+  it('refuses to decline a non-pending booking', async () => {
+    const { svc, prisma, bookingId } = await setupConfirmed();
+    void prisma;
+    await expect(svc.decline(bookingId)).rejects.toThrow(ConflictException);
+  });
+
+  it('throws NOT_FOUND on unknown', async () => {
+    const { svc } = buildSvc();
+    await expect(svc.decline('nope')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('BookingService.cancel', () => {
+  it('refuses to cancel a pending booking', async () => {
+    const { svc, prisma } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    await expect(svc.cancel(b.id)).rejects.toThrow(ConflictException);
+  });
+
+  it('refunds 100% at 30+ days out, marks tier label, and updates charge', async () => {
+    const { svc, prisma, stripe, bookingId, chargeId } = await setupConfirmed();
+    const now = new Date('2026-06-01T00:00:00Z'); // 44 days before 2026-07-15
+    const result = await svc.cancel(bookingId, { now });
+
+    expect(result.status).toBe('cancelled');
+    expect(result.cancellationTierApplied).toBe('30-day:100%');
+    expect(result.refundAmount).toBeCloseTo(663);
+    expect(stripe.refunds).toHaveLength(1);
+    expect(stripe.refunds[0].amount).toBe(66300);
+    const charge = prisma.charges().find((c) => c.id === chargeId)!;
+    expect(charge.refundedAmount).toBeCloseTo(663);
+    expect(charge.status).toBe('refunded');
+    const events = prisma.outbox().map((o: any) => o.payload?.event ?? o.payload?.reason);
+    expect(events).toContain('booking.cancelled');
+    expect(events).toContain('booking.cancelled');
+  });
+
+  it('refunds 50% in the 14-29 day window', async () => {
+    const { svc, stripe, bookingId } = await setupConfirmed();
+    const now = new Date('2026-06-26T00:00:00Z'); // 19 days before 2026-07-15
+    const result = await svc.cancel(bookingId, { now });
+    expect(result.cancellationTierApplied).toBe('14-day:50%');
+    expect(stripe.refunds[0].amount).toBe(33150);
+  });
+
+  it('refunds 0% within 14 days', async () => {
+    const { svc, stripe, bookingId } = await setupConfirmed();
+    const now = new Date('2026-07-10T00:00:00Z'); // 5 days before
+    const result = await svc.cancel(bookingId, { now });
+    expect(result.cancellationTierApplied).toBe('0-day:0%');
+    expect(stripe.refunds).toHaveLength(0);
+    expect(result.refundAmount).toBe(0);
+  });
+
+  it('does not refund when there is no initial charge', async () => {
+    const { svc, prisma, stripe } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    // Skip approve — manually flip to approved with no charges
+    const row = prisma.bookings().find((x) => x.id === b.id)!;
+    row.status = 'approved';
+
+    const result = await svc.cancel(b.id, { now: new Date('2026-06-01T00:00:00Z') });
+    expect(result.status).toBe('cancelled');
+    expect(stripe.refunds).toHaveLength(0);
+  });
+
+  it('does not refund when initial charge is not succeeded', async () => {
+    const { svc, prisma, stripe } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    await svc.approve(b.id); // status: approved, charge: sent (not succeeded)
+
+    const result = await svc.cancel(b.id, { now: new Date('2026-06-01T00:00:00Z') });
+    expect(result.status).toBe('cancelled');
+    expect(stripe.refunds).toHaveLength(0);
+  });
+});
+
+describe('BookingService.modifyDates', () => {
+  it('refuses to modify a cancelled booking', async () => {
+    const { svc, prisma } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    const row = prisma.bookings().find((x) => x.id === b.id)!;
+    row.status = 'cancelled';
+    await expect(
+      svc.modifyDates(b.id, { checkIn: '2026-08-01', checkOut: '2026-08-05' }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects checkOut <= checkIn', async () => {
+    const { svc, prisma } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    await expect(
+      svc.modifyDates(b.id, { checkIn: '2026-08-05', checkOut: '2026-08-05' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('ignores self-overlap (own existing range is not a conflict)', async () => {
+    const { svc, prisma, availability } = buildSvc({
+      conflicts: [
+        { startDate: new Date('2026-07-15'), endDate: new Date('2026-07-18') },
+      ],
+    });
+    void availability;
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    // pricing stub returns the same quote, so delta is unchanged
+    const result = await svc.modifyDates(b.id, {
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-18',
+    });
+    expect(result.delta.direction).toBe('unchanged');
+  });
+
+  it('increase: returns suggestedAdHocChargeKind=extension, no refund', async () => {
+    const { svc, prisma, stripe, pricing } = await (async () => {
+      const built = buildSvc();
+      built.prisma.inquiries().push({ ...VALID_INQUIRY });
+      await built.svc.convertInquiry('inq-1');
+      // Make subsequent quote bigger
+      built.pricing.getQuote.mockResolvedValueOnce({
+        nightlyRate: 200,
+        numberOfNights: 5,
+        subtotal: 1000,
+        taxes: { stateTlt: { label: 's', rate: 0.015, amount: 15 }, cityTlt: { label: 'c', rate: 0.09, amount: 90 }, totalTax: 105 },
+        total: 1105,
+      } as any);
+      return built;
+    })();
+    void pricing;
+    const b = prisma.bookings()[0];
+    const result = await svc.modifyDates(b.id, {
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-20',
+    });
+    expect(result.delta.direction).toBe('increase');
+    expect(result.delta.suggestedAdHocChargeKind).toBe('extension');
+    expect(result.delta.refundIssued).toBeNull();
+    expect(stripe.refunds).toHaveLength(0);
+  });
+
+  it('decrease: auto-refunds against initial charge when succeeded', async () => {
+    const { svc, prisma, stripe, bookingId } = await setupConfirmed();
+    // Reduce the next quote
+    const built = buildSvc();
+    void built;
+    // We need the *same* svc; mock the pricing on it via stripping. Easier: directly mock pricing module by re-injecting:
+    (svc as any).pricing = {
+      getQuote: jest.fn(async () => ({
+        nightlyRate: 200,
+        numberOfNights: 2,
+        subtotal: 400,
+        taxes: { stateTlt: { label: 's', rate: 0.015, amount: 6 }, cityTlt: { label: 'c', rate: 0.09, amount: 36 }, totalTax: 42 },
+        total: 442,
+      })),
+    };
+
+    const result = await svc.modifyDates(bookingId, {
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-17',
+    });
+    expect(result.delta.direction).toBe('decrease');
+    expect(result.delta.refundIssued).not.toBeNull();
+    expect(result.delta.suggestedAdHocChargeKind).toBeNull();
+    expect(stripe.refunds).toHaveLength(1);
+    // 663 - 442 = 221
+    expect(stripe.refunds[0].amount).toBe(22100);
+    void prisma;
+  });
+
+  it('unchanged: no refund, no extension', async () => {
+    const { svc, bookingId, stripe } = await setupConfirmed();
+    const result = await svc.modifyDates(bookingId, {
+      checkIn: '2026-07-15',
+      checkOut: '2026-07-18',
+    });
+    expect(result.delta.direction).toBe('unchanged');
+    expect(stripe.refunds).toHaveLength(0);
+  });
+});
+
+describe('BookingService.createAdHocCharge', () => {
+  it('rejects invalid kind', async () => {
+    const { svc, bookingId } = await setupConfirmed();
+    await expect(
+      svc.createAdHocCharge(bookingId, { kind: 'bogus' as any, amount: 50, description: 'x' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects non-positive amount', async () => {
+    const { svc, bookingId } = await setupConfirmed();
+    await expect(
+      svc.createAdHocCharge(bookingId, { kind: 'damage', amount: 0, description: 'x' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects empty description', async () => {
+    const { svc, bookingId } = await setupConfirmed();
+    await expect(
+      svc.createAdHocCharge(bookingId, { kind: 'damage', amount: 100, description: '' }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('refuses on cancelled booking', async () => {
+    const { svc, prisma, bookingId } = await setupConfirmed();
+    prisma.bookings().find((b) => b.id === bookingId)!.status = 'cancelled';
+    await expect(
+      svc.createAdHocCharge(bookingId, { kind: 'damage', amount: 100, description: 'lamp' }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('creates a damage charge with sent status + checkout session + outbox', async () => {
+    const { svc, prisma, stripe, bookingId } = await setupConfirmed();
+    const result = await svc.createAdHocCharge(bookingId, {
+      kind: 'damage',
+      amount: 200,
+      description: 'broken lamp',
+    });
+    expect(result.checkoutUrl).toMatch(/checkout\.stripe\.test/);
+    const newCharge = prisma.charges().find((c) => c.id === result.chargeId)!;
+    expect(newCharge.kind).toBe('damage');
+    expect(newCharge.status).toBe('sent');
+    expect(newCharge.amount).toBe(200);
+    expect(newCharge.description).toBe('broken lamp');
+    expect(newCharge.stripeCheckoutSessionId).toBeTruthy();
+    expect(stripe.sessions.size).toBe(2); // initial + ad-hoc
+    expect(prisma.outbox().some((o: any) => o.payload.event === 'booking.ad_hoc_charge_sent')).toBe(true);
+  });
+
+  it('rolls back the charge if Stripe session creation fails', async () => {
+    const { svc, prisma, stripe, bookingId } = await setupConfirmed();
+    stripe.failNextSessionWith = new Error('Stripe boom');
+    const before = prisma.charges().length;
+    await expect(
+      svc.createAdHocCharge(bookingId, {
+        kind: 'incidental',
+        amount: 50,
+        description: 'late checkout',
+      }),
+    ).rejects.toThrow('Stripe boom');
+    expect(prisma.charges()).toHaveLength(before);
+  });
+
+  it('creates extension and incidental kinds too', async () => {
+    const { svc, prisma, bookingId } = await setupConfirmed();
+    await svc.createAdHocCharge(bookingId, {
+      kind: 'extension',
+      amount: 300,
+      description: 'extra night',
+    });
+    await svc.createAdHocCharge(bookingId, {
+      kind: 'incidental',
+      amount: 25,
+      description: 'pet',
+    });
+    const kinds = prisma.charges().map((c) => c.kind).sort();
+    expect(kinds).toEqual(['extension', 'incidental', 'initial'].sort());
+  });
+});
+
+describe('BookingService.refundCharge', () => {
+  it('rejects non-succeeded charge', async () => {
+    const { svc, prisma } = buildSvc();
+    prisma.inquiries().push({ ...VALID_INQUIRY });
+    const b = await svc.convertInquiry('inq-1');
+    const approve = await svc.approve(b.id); // charge is 'sent' status
+    await expect(
+      svc.refundCharge(approve.chargeId, { amount: 100 }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('rejects amount > remaining', async () => {
+    const { svc, chargeId } = await setupConfirmed();
+    await expect(
+      svc.refundCharge(chargeId, { amount: 9999 }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('rejects non-positive amount', async () => {
+    const { svc, chargeId } = await setupConfirmed();
+    await expect(
+      svc.refundCharge(chargeId, { amount: 0 }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('partial refund updates refundedAmount, status stays succeeded', async () => {
+    const { svc, prisma, stripe, chargeId } = await setupConfirmed();
+    const result = await svc.refundCharge(chargeId, { amount: 100 });
+    expect(result.amountRefunded).toBe(100);
+    expect(stripe.refunds[0].amount).toBe(10000);
+    const charge = prisma.charges().find((c) => c.id === chargeId)!;
+    expect(charge.refundedAmount).toBeCloseTo(100);
+    expect(charge.status).toBe('succeeded');
+    expect(charge.refundedAt).toBeInstanceOf(Date);
+  });
+
+  it('full refund flips status to refunded', async () => {
+    const { svc, prisma, chargeId } = await setupConfirmed();
+    await svc.refundCharge(chargeId, { amount: 663 });
+    const charge = prisma.charges().find((c) => c.id === chargeId)!;
+    expect(charge.status).toBe('refunded');
+    expect(charge.refundedAmount).toBeCloseTo(663);
+  });
+
+  it('returns NOT_FOUND on unknown charge', async () => {
+    const { svc } = buildSvc();
+    await expect(
+      svc.refundCharge('nope', { amount: 50 }),
+    ).rejects.toThrow(NotFoundException);
   });
 });

@@ -52,6 +52,13 @@ const EnvSchema = z.object({
   TWILIO_FROM_NUMBER: z.string().optional(),
   MAILERSEND_API_KEY: z.string().optional(),
   MAILERSEND_FROM_EMAIL: z.string().email().optional(),
+
+  // Email adapter selection (M9 / D-021)
+  EMAIL_PROVIDER: z.enum(['mailhog', 'mailersend', 'fake']).optional(),
+  EMAIL_FROM: z.string().optional(),
+  MAILHOG_HOST: z.string().optional(),
+  MAILHOG_PORT: z.coerce.number().int().positive().optional(),
+  ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   PRICELABS_API_KEY: z.string().optional(),
   PRICELABS_LISTING_ID: z.string().optional(),
 });

@@ -57,8 +57,9 @@ export class InquiryService {
         },
       });
 
-      // Outbox row — admin notification. Drained by the outbox-drain
-      // worker once that lands; for now the row is durable.
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
       await tx.outbox.create({
         data: {
           jobName: 'admin-notification',
@@ -66,10 +67,30 @@ export class InquiryService {
             event: 'inquiry.new',
             inquiryId: created.id,
             guestName: created.name,
+            guestEmail: created.email,
+            checkIn: input.checkIn,
+            checkOut: input.checkOut,
+            message: created.message,
+          } as unknown as Prisma.InputJsonValue,
+          idempotencyKey: `inquiry.new:${created.id}`,
+        },
+      });
+
+      // Outbox row: drained asynchronously by OutboxDrainService.
+      // Side effects (email/SMS/rebuild) fire from the drain, not here.
+      // See docs/DECISION-LOG.md D-019 + D-022.
+      await tx.outbox.create({
+        data: {
+          jobName: 'guest-notification',
+          payload: {
+            event: 'inquiry.acknowledged',
+            inquiryId: created.id,
+            guestName: created.name,
+            guestEmail: created.email,
             checkIn: input.checkIn,
             checkOut: input.checkOut,
           } as unknown as Prisma.InputJsonValue,
-          idempotencyKey: `inquiry.new:${created.id}`,
+          idempotencyKey: `inquiry.acknowledged:${created.id}`,
         },
       });
 

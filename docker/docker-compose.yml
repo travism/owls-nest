@@ -10,6 +10,20 @@ services:
       timeout: 3s
       retries: 5
 
+  # MailHog catches every transactional email in dev (D-021). SMTP on 1025;
+  # web UI at http://localhost:8025. Production routes through MailerSend.
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8025/api/v2/messages > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: ..
@@ -25,6 +39,8 @@ services:
       - media:/var/owlsnest/media
     depends_on:
       redis:
+        condition: service_healthy
+      mailhog:
         condition: service_healthy
 
   build-worker:

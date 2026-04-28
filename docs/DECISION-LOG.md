@@ -344,4 +344,93 @@ If we shipped M7 with a single-payment design, every one of these would later re
 
 ---
 
+## D-021 — Email infrastructure: MailHog dev / MailerSend prod / templates rendered as code
+
+- **Date:** 2026-04-26
+- **Status:** Accepted (refines D-001 and D-018)
+
+**Decision:**
+
+1. **Local development uses MailHog**, run as a Compose service exposing SMTP on `:1025` and a web UI on `:8025`. The API talks to it via `nodemailer` SMTP.
+2. **Production uses MailerSend** (D-001 stands as the prod provider choice).
+3. **Tests use a `FakeEmailAdapter`** that records messages in-memory — same pattern as `FakeStripeAdapter`.
+4. **Transactional templates live in `apps/api/src/integrations/email/templates/` as TypeScript functions** returning `{ subject, html, text }`. Variable interpolation is plain string templates — no Handlebars/Mustache. Templates are not stored in the provider's dashboard.
+
+**Alternatives considered:**
+
+- A. MailerSend's hosted templates (referenced by template ID per D-001's original consequence). Rejected: dev/prod parity, accidental drift between dashboard edits and code, harder to test deterministically, and no preview path in dev without burning real sends.
+- B. SES + react-email or mjml for rendering. Rejected: more moving parts than a small property needs.
+- C. Run MailHog only when the contributor opts in. Rejected: it's ~30MB, starts in seconds, and the cost-of-confusion when an inquiry email "doesn't arrive" is much higher than the disk cost.
+
+**Rationale:** Treat email like any other piece of code — versioned, code-reviewed, deterministically tested. Same payload renders to MailHog locally and MailerSend in prod, so what the owner saw in development is byte-identical to what the guest receives. Zero provider lock-in for the rendered output; MailerSend just becomes a delivery surface.
+
+**Consequences:**
+
+- New service: `mailhog` in `docker/docker-compose.yml`, ports `1025`/`8025`. API depends on it.
+- New env vars: `EMAIL_PROVIDER` (`mailhog | mailersend | fake`), `EMAIL_FROM`, `MAILHOG_HOST`, `MAILHOG_PORT`, `ADMIN_NOTIFICATION_EMAIL`. `EmailModule` resolves the adapter at boot; production hard-fails if `EMAIL_PROVIDER !== 'mailersend'`.
+- New deps in `apps/api`: `nodemailer`, `@types/nodemailer`, `mailersend`, `@nestjs/schedule`, `bullmq`.
+- D-001's "templates managed in MailerSend dashboard" consequence is **superseded** — templates live in code now. The MailerSend account is still required for deliverability/SPF/DKIM/DMARC.
+
+**Reference:** `apps/api/src/integrations/email/`. Adapter pattern mirrors `apps/api/src/integrations/stripe/`.
+
+---
+
+## D-022 — Outbox drain runs in-process; only `rebuild-site` goes to BullMQ
+
+- **Date:** 2026-04-26
+- **Status:** Accepted (refines D-002 and D-019)
+
+**Decision:** The transactional Outbox drain runs **inside the API process** as a `@nestjs/schedule` cron (every 10 seconds; configurable). It:
+
+- Reads `Outbox` rows where `enqueuedAt IS NULL` and `attempts < 5`.
+- For `guest-notification` and `admin-notification` rows: renders the matching template (per `payload.event`) and calls the email adapter directly.
+- For `rebuild-site` rows: enqueues a BullMQ job into the existing `rebuild-site` queue, which the long-running `apps/build-worker` consumes (D-005).
+- Stamps `enqueuedAt` on success; increments `attempts` + records `failureReason` on error.
+
+**Alternatives considered:**
+
+- A. Stand up a second worker (`apps/outbox-worker`) and route everything through BullMQ. Rejected: another container, another set of credentials, another health check — for jobs that are millisecond-scale (a single SMTP send).
+- B. Keep `setInterval` polling rather than `@nestjs/schedule`. Rejected: schedule's cron decorator is just clearer at the call site.
+- C. Use a Postgres `LISTEN/NOTIFY` trigger to push rows into BullMQ. Rejected: works fine, but the rebuild-site path *does* need BullMQ for retry/backoff/concurrency, and email path doesn't — splitting the two by jobName is simpler than unifying through Redis.
+
+**Rationale:** Email sends are short, idempotent, and best handled where the data already lives. Astro builds are minutes-long, need retries and a separate process pool, and already have a worker (D-005). Use BullMQ where it earns its keep; skip it where it doesn't. D-002's "all side-effecting workflows go through queues" gets a refinement: the *transactional outbox* is the queue for short jobs; the BullMQ queue is for long jobs.
+
+**Consequences:**
+
+- New module `apps/api/src/outbox/`: `OutboxDrainService` + `OutboxModule`. Tests can call `tick()` synchronously; cron is disabled in `NODE_ENV=test`.
+- The `outbox-drain` queue mentioned in D-019's consequence isn't a real BullMQ queue — only the `rebuild-site` queue is.
+- Idempotency: `Outbox.idempotencyKey` flows through to (a) the email adapter as `X-Idempotency-Key` (MailerSend honors it; MailHog ignores), and (b) BullMQ as `jobId` for rebuild-site (BullMQ rejects duplicate ids).
+- New deps `@nestjs/schedule` and `bullmq` in `apps/api`.
+
+**Reference:** `apps/api/src/outbox/outbox-drain.service.ts`. Cross-references D-001, D-002, D-005, D-019.
+
+---
+
+## D-023 — V1 booking flow: guest inquiry → admin convert → admin approve. No public `POST /api/v1/bookings/request` endpoint.
+
+- **Date:** 2026-04-26
+- **Status:** Accepted
+
+**Decision:** In Phase 1, guests cannot directly create a `Booking` row. The only public state-creating booking endpoint is `POST /api/v1/inquiries` (M6). An admin reviews the inquiry, converts it into a `Booking` (M7), and approves it. There is no public `POST /api/v1/bookings/request` endpoint until Phase 3.
+
+**Alternatives considered:**
+
+- A. Ship `POST /api/v1/bookings/request` in M7 as a public endpoint that creates a `pending_approval` booking directly. Rejected — see rationale.
+- B. Ship the same endpoint behind email-magic-link auth in Phase 1. Rejected: magic-link auth (D-001 + Phase 3 / M3.7) doesn't land until Phase 3, and pulling it forward bloats Phase 1 scope.
+
+**Rationale:** PRD §4.1 §3b describes a "request to book" flow that requires the requester to be an authenticated guest (per D-001's MailerSend magic-link design). The auth surface for guests doesn't ship until M3.7. Without auth, a public `POST /api/v1/bookings/request` would be a public state-creating endpoint with no meaningful identity binding — every submission writes a `Booking` row, holds inventory via `pending_approval` (`AvailabilityService` reserves those dates), triggers admin notifications, and feeds Stripe Customer creation downstream. That's a much larger blast radius than the inquiry table, which is conceptually a contact-form row.
+
+The inquiry-converted path covers V1 needs end-to-end: guest fills the calendar form → inquiry lands in admin queue → admin converts (creating a Booking) → admin approves (Stripe Checkout link to guest). The friction is exactly one extra admin click per real booking, which is acceptable for a single-property operation that already plans to review every reservation.
+
+**Consequences:**
+
+- M7's "request → `pending_approval`" task is satisfied by the **admin-side** convert path (`POST /admin/inquiries/:id/convert` → Booking). No new public endpoint.
+- No `POST /api/v1/bookings/request` route exists in the V1 router. Public callers see only `/api/v1/inquiries`, `/api/v1/availability`, `/api/v1/pricing/quote`, `/api/v1/property`, and the iCal export.
+- BookingCalendar's "Continue" CTA links to `/book/inquire` (an inquiry form), not to a booking-request form. M5/M6 already implement this.
+- When magic-link auth lands in M3.7, a future decision (likely D-NNN in Phase 3) can re-open this question and ship `POST /api/v1/bookings/request` behind that auth surface — at which point this entry is superseded.
+
+**Reference:** Cross-references D-001 (MailerSend magic links) and Phase 3 / M3.7 (guest magic-link auth) in `docs/BUILD-PLAN.md`. PRD §4.1 §3b describes the long-term flow this decision defers.
+
+---
+
 *New decisions append to the bottom with the next sequential `D-NNN`. Mark superseded decisions as `Status: Superseded by D-NNN` rather than editing in place.*

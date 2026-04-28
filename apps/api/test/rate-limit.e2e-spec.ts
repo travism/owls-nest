@@ -10,7 +10,7 @@
 // 429 RATE_LIMITED in the standard envelope.
 
 import 'reflect-metadata';
-import { Controller, Get, Module } from '@nestjs/common';
+import { Controller, Get, Module, Post } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import {
@@ -36,13 +36,27 @@ class ThrottleTestController {
   }
 }
 
+// Mirrors the @Throttle shape we apply to the real admin booking endpoints
+// (apps/api/src/booking/booking.controller.ts). The TEST_MULTIPLIER applied
+// in throttler.module.ts only affects the global default bucket — per-route
+// @Throttle() overrides like this one are evaluated as written, so we can
+// test the realistic 5/60s limit here.
+@Controller('api/v1/admin/bookings')
+class AdminBookingThrottleStub {
+  @Post(':id/approve')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  approve() {
+    return { ok: true };
+  }
+}
+
 @Module({
   imports: [
     ThrottlerModule.forRoot([
       { name: 'default', ttl: seconds(60), limit: 5 },
     ]),
   ],
-  controllers: [ThrottleTestController],
+  controllers: [ThrottleTestController, AdminBookingThrottleStub],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 class TestThrottlerAppModule {}
@@ -85,6 +99,20 @@ describe('Rate limiting (e2e)', () => {
       expect(res.status).toBe(200);
     }
     const overflow = await request(server).get('/thr/default');
+    expect(overflow.status).toBe(429);
+    expect(overflow.body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('throttles POST /admin/bookings/:id/approve at 5/60s — 6th call returns 429 RATE_LIMITED', async () => {
+    const id = '00000000-0000-0000-0000-000000000001';
+    for (let i = 1; i <= 5; i++) {
+      const res = await request(server).post(`/api/v1/admin/bookings/${id}/approve`);
+      // Nest defaults POST to 201; the stub returns plain JSON either way.
+      expect(res.status).toBeLessThan(300);
+    }
+    const overflow = await request(server).post(
+      `/api/v1/admin/bookings/${id}/approve`,
+    );
     expect(overflow.status).toBe(429);
     expect(overflow.body.error.code).toBe('RATE_LIMITED');
   });

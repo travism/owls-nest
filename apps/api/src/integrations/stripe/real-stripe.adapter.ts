@@ -10,11 +10,13 @@ import Stripe from 'stripe';
 import type {
   CreateCheckoutSessionInput,
   CreateCustomerInput,
+  CreateRefundInput,
   StripeAdapter,
   StripeBalanceTransaction,
   StripeCheckoutSession,
   StripeCustomer,
   StripePaymentIntent,
+  StripeRefund,
   StripeWebhookEvent,
 } from './stripe.types';
 
@@ -111,6 +113,28 @@ export class RealStripeAdapter implements StripeAdapter {
   async retrieveBalanceTransaction(id: string): Promise<StripeBalanceTransaction> {
     const bt = await this.mustClient().balanceTransactions.retrieve(id);
     return { id: bt.id, fee: bt.fee };
+  }
+
+  async createRefund(input: CreateRefundInput): Promise<StripeRefund> {
+    const r = await this.mustClient().refunds.create({
+      payment_intent: input.paymentIntentId,
+      amount: input.amountCents,
+      reason: input.reason as
+        | 'duplicate'
+        | 'fraudulent'
+        | 'requested_by_customer'
+        | undefined,
+      metadata: input.metadata,
+    });
+    return {
+      id: r.id,
+      amount: r.amount,
+      status: r.status ?? 'unknown',
+      paymentIntentId:
+        typeof r.payment_intent === 'string'
+          ? r.payment_intent
+          : input.paymentIntentId,
+    };
   }
 
   constructWebhookEvent(

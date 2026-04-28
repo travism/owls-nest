@@ -8,11 +8,11 @@ Single source of truth for "where are we in the buildout." Each phase has milest
 
 ## Current focus
 
-> **Now:** ✅ M7 complete — ready for M8
-> **Next up:** M8 — Booking management actions (incl. ad-hoc charges + extensions)
+> **Now:** ✅ Phase 1 fully complete — M1 through M10 all green
+> **Next up:** Phase 2 — operations (cleaner SMS waterfall, two-way guest messaging, iCal import)
 > **Open carryovers:** see [`CARRYOVERS.md`](CARRYOVERS.md) — small loose ends not tied to a single milestone (deploy items, deferred infra, conditional refactors).
 
-Last updated: 2026-04-26 (after M7; 316 tests passing)
+Last updated: 2026-04-26 (after M10; 428 tests passing — shared 53, admin 20, web 45, api unit 200, api e2e 110)
 
 ---
 
@@ -236,26 +236,75 @@ Verified 2026-04-25.
 ---
 
 ### M8 — Booking management actions (incl. ad-hoc charges + extensions)
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 
 Five admin actions on an existing booking, all built on top of `BookingCharge` (D-020) so the data model stays uniform:
 
-- [ ] **Decline** — with notification to guest
-- [ ] **Cancel** — auto-refund per cancellation tier (configurable thresholds): updates `BookingCharge.refundedAmount` on the `initial` charge, refunds via Stripe, transactionally
-- [ ] **Modify dates** — re-quotes price for the new range; if the new total is higher, suggests creating an ad-hoc `extension` charge for the delta; if lower, refunds the difference against the `initial` charge. PRD §4.6 (stay extensions) is this action + send-payment-request composed together.
-- [ ] **Send ad-hoc payment request** — new flow per PRD §4.5. Admin picks `kind` (`extension | damage | incidental`), enters amount + description, system creates a `BookingCharge`, opens a Checkout Session, sends the payment link via SMS + email. Saves the `stripeCheckoutSessionId` for status tracking.
-- [ ] **Refund any charge** — partial or full refund on a specific `BookingCharge`. Updates `refundedAmount` + writes the Stripe refund event back via webhook.
-- [ ] All five actions write AuditLogEntry with before/after JSON
-- [ ] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one); ad-hoc charge amount validation (positive; reasonable max); extension delta calculator (re-quote new total minus already-paid); per-charge refund-amount calculator
-- [ ] **E2E tests** — decline (sends notification, transitions status); cancel at each tier (30+ days = full refund of `initial` charge, 14–29 = 50%, <14 = $0); modify dates that increase total → admin gets prompted to create extension charge; modify dates that decrease total → refund issued against `initial`; ad-hoc charge happy path (creates `BookingCharge`, sends link, webhook flips to `succeeded`); ad-hoc charge for each `kind`; refund failure rolls back DB state; AuditLogEntry written for each action
-- [ ] **Component tests** — admin booking-detail action buttons (cancel confirms, modify-dates form, send-payment-request modal with kind picker + amount + description)
-- [ ] `pnpm test:all` green
+- [x] **Decline** — with notification to guest (Outbox `booking.declined`)
+- [x] **Cancel** — auto-refund per cancellation tier (30/14/0-day thresholds resolved against `Property.cancellationPolicy`): updates `BookingCharge.refundedAmount` on the `initial` charge, refunds via Stripe, transactionally
+- [x] **Modify dates** — re-quotes price for the new range; if the new total is higher, returns `delta.suggestedAdHocChargeKind='extension'` and the admin UI pre-fills the ad-hoc charge panel for the delta; if lower, refunds the difference against the `initial` charge. PRD §4.6 (stay extensions) is this action + send-payment-request composed together.
+- [x] **Send ad-hoc payment request** — admin picks `kind` (`extension | damage | incidental`), enters amount + description; service creates a `BookingCharge`, opens a Checkout Session, writes Outbox `booking.ad_hoc_charge_sent`. Stripe failure rolls back the pending charge row.
+- [x] **Refund any charge** — partial or full refund on a specific `BookingCharge`. Updates `refundedAmount`; flips status to `refunded` when fully refunded.
+- [x] All five actions write AuditLogEntry with before/after JSON
+- [x] **Unit tests** — cancellation tier resolver (every threshold boundary including off-by-one and unsorted-tier inputs); refund cents calculator (rounding, alreadyRefunded subtraction, 0% / fully-refunded); BookingService unit tests for decline / cancel (3 tiers + no-charge / not-succeeded paths) / modifyDates (increase/decrease/unchanged + self-overlap) / createAdHocCharge (validation + rollback) / refundCharge (partial / full / non-succeeded)
+- [x] **E2E tests** — decline; cancel at each tier (60d=100%, 20d=50%, 5d=0%); modify-dates increase suggests `extension` no refund, decrease auto-refunds; ad-hoc charge for each `kind`; partial → full refund flips charge to `refunded`; AuditLogEntry written for each action
+- [x] **Component tests** — admin booking-detail action buttons (Approve/Decline for pending; Cancel/Modify/Send for confirmed; refund button on succeeded charge with remaining balance; labeled inputs per CLAUDE.md #9)
+- [x] `pnpm test:all` green
+
+**Notes:** Adds `apps/api/src/booking/cancellation-policy.{ts,spec.ts}`, extends `StripeAdapter` with `createRefund`, adds 5 admin endpoints under `/api/v1/admin/bookings`. No schema changes — uses existing `cancellationTierApplied` / `refundAmount` / `cancelledAt` fields on Booking and `refundedAmount` / `refundedAt` on BookingCharge. Test-count delta: 316 → 380 (+64).
 
 **Acceptance:** All five actions work end-to-end. After M7 + M8 the owner can: take an initial booking; decline/cancel/modify it; send extension or damage charges later. Cancellation tier logic applied to the initial charge; audit log captures every action.
 
 ---
 
-**Phase 1 done when:** all M1–M8 ✅ and the property can take a real direct booking from a guest.
+### M9 — Phase 1 hardening: outbox drain, email, webhooks, rebuild worker
+**Status:** ✅ Complete
+
+Phase 1 gap-analysis (2026-04-26) flagged four launch-critical gaps the M1–M8 build plan didn't cover. None blocked existing tests; all blocked real-world operation. M9 closed them.
+
+- [x] **Outbox drain (in-process)** — `OutboxDrainService` (apps/api/src/outbox/) reads `Outbox` rows where `enqueuedAt IS NULL` and `attempts < 5`, dispatches by `jobName`: `guest-notification`/`admin-notification` → render template + call email adapter; `rebuild-site` → enqueue BullMQ job. Stamps `enqueuedAt` on success; increments `attempts` + records `failureReason` on failure. Per D-022, the drain runs inside the API via `@nestjs/schedule` (every 10s); only `rebuild-site` flows to BullMQ.
+- [x] **Email adapter** — `EmailAdapter` interface + three implementations:
+  - `MailHogAdapter` (SMTP via `nodemailer`) for development (per D-021)
+  - `MailerSendAdapter` (`mailersend` SDK) for production (D-001)
+  - `FakeEmailAdapter` (in-memory) for tests
+  - Resolution via `EMAIL_PROVIDER` env (`mailhog | mailersend | fake`); forces `fake` when `NODE_ENV=test`; production hard-fails if not `mailersend`.
+  - Templates as code under `apps/api/src/integrations/email/templates/index.ts` returning `{ subject, html, text }` — same payload to either provider for dev/prod parity.
+  - MailHog added to Compose with ports 1025 (SMTP) + 8025 (web UI).
+- [x] **Astro rebuild worker** — `apps/build-worker/src/main.ts` now invokes `astro build` via `child_process.spawn` against `WEB_APP_PATH`, builds into a staging dir, then atomically `rename`s into `WEB_DIST_PATH`. 30-second debounce in `apps/build-worker/src/debouncer.ts` (D-005) coalesces rapid successive jobs into a single build with the latest payload.
+- [x] **Stripe webhook event coverage** — `StripeWebhookController` handles `charge.dispute.created`, `charge.dispute.closed`, `charge.refunded` (covers external refunds; idempotently no-ops if local state already reflects them), and `payment_intent.payment_failed`. Each writes an Outbox `admin-notification` row + an AuditLogEntry under one of `webhook.stripe.{dispute_created,dispute_closed,refunded,payment_failed}`. WebhookEvent idempotency unchanged.
+- [x] **Decision-log entries** — D-021 (MailHog dev / MailerSend prod / templates rendered as code), D-022 (outbox drain runs in-process; only rebuild-site goes to BullMQ).
+- [x] **Unit tests** — OutboxDrainService dispatcher (each jobName, retry path, unknown jobName, unknown event, missing recipient); every email template; FakeEmailAdapter; build debouncer (coalesce / re-arm / error isolation).
+- [x] **E2E tests** — `email-flow.e2e-spec.ts`: inquiry → drain → both emails; approve → drain → payment-link email; webhook → drain → confirmation email; idempotent re-tick. `stripe-webhooks.e2e-spec.ts`: each new event produces the expected outbox + audit row; refund-already-applied skips side-effects.
+- [x] `pnpm test:all` green (417 tests).
+
+**Acceptance:** A real booking end-to-end produces a real email at every transition; admin gets notified on disputes/failures; `rebuild-site` actually rebuilds the static site. After M9 the platform can be put in front of a paying guest.
+
+**Notes:**
+- Inquiry creation now writes two outbox rows (admin notification + guest acknowledgement) instead of one — drain handles both.
+- Booking-confirmed and approved outbox payloads now carry `guestEmail`, `guestName`, `checkIn`, `checkOut`, and `amount` so the drain doesn't need to re-fetch.
+- For dev: `EMAIL_PROVIDER=mailhog`, `MAILHOG_HOST=mailhog`, `MAILHOG_PORT=1025`. Web UI at http://localhost:8025.
+- Test-count delta: 380 → 417 (+37). Breakdown: shared 53, admin 20, web 35, api unit 200, api e2e 109.
+
+---
+
+### M10 — Phase 1 polish: throttling, a11y, public booking endpoint, content pages
+**Status:** ✅ Complete
+
+Lower-severity items from the same gap analysis.
+
+- [x] **Throttle sensitive admin endpoints** — `@Throttle({ default: { limit: 5, ttl: 60_000 } })` on `POST /admin/bookings/:id/approve|decline|cancel|modify-dates|charges` and `POST /admin/bookings/charges/:id/refund`. Defense-in-depth on top of session auth + audit log.
+- [x] **Public booking-request path** — decision: defer the guest-initiated `POST /api/v1/bookings/request` to Phase 3 (M3.7 magic-link auth) and document the inquiry → admin convert flow as the V1 path. Captured as **D-023** in DECISION-LOG.
+- [x] **Placeholder pages** — `/blog`, `/area-guide`, `/faq` Astro pages with "Coming in Phase 3" copy + nav links so we don't ship broken links.
+- [x] **A11y label audit** — verified every guest-facing form input in `apps/web` has a properly associated label. Added a `toHaveAccessibleName()` audit test in `InquiryForm.test.tsx` that walks every `<input>/<select>/<textarea>` in the rendered form (the only public form with form controls; `BookingCalendar` is a `react-day-picker` widget with no raw inputs).
+- [x] **Outbox JSDoc** — one-line comment at every `prisma.outbox.create()` / `tx.outbox.create()` callsite (15 total: 9 in `booking.service.ts`, 2 in `inquiry.service.ts`, 4 in `webhooks/stripe-webhook.controller.ts`) pointing to D-019 + D-022.
+- [x] **Unit/component tests** — label-association test in `InquiryForm.test.tsx`; throttle e2e for `POST /admin/bookings/:id/approve` extended into `rate-limit.e2e-spec.ts`; nav + page-structure assertions for the three new pages extended into `pages.test.ts`.
+- [x] `pnpm test:all` green (428 tests; +11 from M9).
+
+**Acceptance:** No 404s from public nav; admin endpoints have stricter rate limits; a11y baseline guaranteed by tests; future contributors won't be confused about the outbox.
+
+---
+
+**Phase 1 done when:** all M1–M10 ✅ and the property can take a real direct booking from a guest **and actually deliver the email/SMS confirmation**.
 
 ### Inter-milestone fixes
 

@@ -22,6 +22,9 @@ const expectedPages: Array<{ file: string; title: RegExp; h1: RegExp }> = [
   { file: 'house-rules.astro',    title: /title="House rules/,           h1: /<h1>House rules/ },
   { file: 'book.astro',           title: /title="Book your stay"/,       h1: /<h1>Book your stay<\/h1>/ },
   { file: 'book/inquire.astro',   title: /title="Make a booking request"/, h1: /<h1>Make a booking request<\/h1>/ },
+  { file: 'blog/index.astro',     title: /title="Blog"/,                  h1: /<h1>Blog<\/h1>/ },
+  { file: 'area-guide/index.astro', title: /title="Area guide"/,          h1: /<h1>Area guide<\/h1>/ },
+  { file: 'faq.astro',            title: /title="FAQ"/,                   h1: /<h1>FAQ<\/h1>/ },
 ];
 
 describe('Astro pages — structural assertions', () => {
@@ -62,11 +65,14 @@ describe('Site layout', () => {
     expect(src).toMatch(/property="og:type"/);
   });
 
-  it('has a primary nav with all 4 brand pages', () => {
+  it('has a primary nav with all brand pages', () => {
     expect(src).toMatch(/href="\/about"/);
     expect(src).toMatch(/href="\/gallery"/);
     expect(src).toMatch(/href="\/house-rules"/);
     expect(src).toMatch(/href="\/book"/);
+    expect(src).toMatch(/href="\/area-guide"/);
+    expect(src).toMatch(/href="\/blog"/);
+    expect(src).toMatch(/href="\/faq"/);
   });
 
   it('has a skip-link for keyboard users', () => {

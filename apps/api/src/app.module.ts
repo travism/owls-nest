@@ -14,8 +14,10 @@ import { CalendarModule } from './calendar/calendar.module';
 import { InquiryModule } from './inquiry/inquiry.module';
 import { BookingModule } from './booking/booking.module';
 import { StripeModule } from './integrations/stripe/stripe.module';
+import { EmailModule } from './integrations/email/email.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { AppThrottlerModule } from './throttler/throttler.module';
+import { OutboxModule } from './outbox/outbox.module';
 
 @Module({
   imports: [
@@ -40,9 +42,11 @@ import { AppThrottlerModule } from './throttler/throttler.module';
     BlockedDateModule,
     CalendarModule,
     StripeModule,
+    EmailModule,
     BookingModule,
     InquiryModule,
     WebhooksModule,
+    OutboxModule,
   ],
   providers: [
     // Apply ThrottlerGuard globally — uses the 'default' bucket (100/min/IP)

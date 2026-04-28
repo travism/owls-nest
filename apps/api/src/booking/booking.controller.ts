@@ -1,9 +1,14 @@
 // Admin endpoints for managing bookings.
-// /admin/bookings list/detail + /admin/bookings/:id/approve.
-// Conversion from Inquiry stays in InquiryController; that handler now
-// delegates to BookingService.convertInquiry under the hood.
+// /admin/bookings list/detail + lifecycle actions:
+//   - approve / decline (M7 + M8)
+//   - cancel (M8) — auto-refunds per cancellation tier
+//   - modify-dates (M8) — re-quotes pricing, suggests extension or refunds
+//   - charges (M8) — ad-hoc payment requests
+//   - charges/:chargeId/refund (M8) — partial/full refunds
+// All actions write an AuditLogEntry with before/after.
 
 import {
+  Body,
   Controller,
   Get,
   Param,
@@ -13,12 +18,24 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { ZodValidationPipe } from '../auth/zod-validation.pipe';
 import { AdminSessionGuard, type RequestWithAdmin } from '../auth/admin-session.guard';
 import { AuditService } from '../auth/audit.service';
 import { z } from 'zod';
-import { BookingService, type BookingStatus } from './booking.service';
+import { BookingService, type BookingStatus, type AdHocChargeKind } from './booking.service';
+
+// Stricter rate limit on sensitive admin booking actions (M10 / arch §12.3).
+// Defense-in-depth on top of session auth + audit log. The TEST_MULTIPLIER
+// in throttler.module.ts bumps this 1000x in NODE_ENV=test so existing
+// e2e suites don't trip it; rate-limit.e2e-spec.ts exercises the real path.
+const ADMIN_ACTION_THROTTLE = {
+  default: {
+    limit: 5 * (process.env.NODE_ENV === 'test' ? 1000 : 1),
+    ttl: 60_000,
+  },
+};
 
 const StatusFilterSchema = z.object({
   status: z
@@ -31,6 +48,26 @@ const StatusFilterSchema = z.object({
       'completed',
     ])
     .optional(),
+});
+
+const DeclineBodySchema = z.object({
+  reason: z.string().max(2000).optional(),
+});
+const CancelBodySchema = z.object({
+  reason: z.string().max(2000).optional(),
+});
+const ModifyDatesBodySchema = z.object({
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const AdHocChargeBodySchema = z.object({
+  kind: z.enum(['extension', 'damage', 'incidental']),
+  amount: z.number().positive().max(50000),
+  description: z.string().min(1).max(500),
+});
+const RefundBodySchema = z.object({
+  amount: z.number().positive(),
+  reason: z.string().max(500).optional(),
 });
 
 function ipOf(req: Request): string | null {
@@ -62,6 +99,7 @@ export class AdminBookingController {
   }
 
   @Post(':id/approve')
+  @Throttle(ADMIN_ACTION_THROTTLE)
   async approve(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Req() req: RequestWithAdmin,
@@ -74,6 +112,127 @@ export class AdminBookingController {
       targetType: 'booking',
       targetId: id,
       before,
+      after: result.booking,
+      ipAddress: ipOf(req),
+      userAgent: uaOf(req),
+    });
+    return result;
+  }
+
+  @Post(':id/decline')
+  @Throttle(ADMIN_ACTION_THROTTLE)
+  async decline(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(DeclineBodySchema))
+    body: z.infer<typeof DeclineBodySchema>,
+    @Req() req: RequestWithAdmin,
+  ) {
+    const before = await this.bookings.getById(id);
+    const after = await this.bookings.decline(id, { reason: body.reason });
+    await this.audit.log({
+      action: 'booking.decline',
+      adminUserId: req.adminUser?.id ?? null,
+      targetType: 'booking',
+      targetId: id,
+      before,
+      after,
+      ipAddress: ipOf(req),
+      userAgent: uaOf(req),
+    });
+    return after;
+  }
+
+  @Post(':id/cancel')
+  @Throttle(ADMIN_ACTION_THROTTLE)
+  async cancel(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(CancelBodySchema))
+    body: z.infer<typeof CancelBodySchema>,
+    @Req() req: RequestWithAdmin,
+  ) {
+    const before = await this.bookings.getById(id);
+    const after = await this.bookings.cancel(id, { reason: body.reason });
+    await this.audit.log({
+      action: 'booking.cancel',
+      adminUserId: req.adminUser?.id ?? null,
+      targetType: 'booking',
+      targetId: id,
+      before,
+      after,
+      ipAddress: ipOf(req),
+      userAgent: uaOf(req),
+    });
+    return after;
+  }
+
+  @Post(':id/modify-dates')
+  @Throttle(ADMIN_ACTION_THROTTLE)
+  async modifyDates(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(ModifyDatesBodySchema))
+    body: z.infer<typeof ModifyDatesBodySchema>,
+    @Req() req: RequestWithAdmin,
+  ) {
+    const before = await this.bookings.getById(id);
+    const result = await this.bookings.modifyDates(id, body);
+    await this.audit.log({
+      action: 'booking.modify_dates',
+      adminUserId: req.adminUser?.id ?? null,
+      targetType: 'booking',
+      targetId: id,
+      before,
+      after: result.booking,
+      ipAddress: ipOf(req),
+      userAgent: uaOf(req),
+    });
+    return result;
+  }
+
+  @Post(':id/charges')
+  @Throttle(ADMIN_ACTION_THROTTLE)
+  async createCharge(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(AdHocChargeBodySchema))
+    body: z.infer<typeof AdHocChargeBodySchema>,
+    @Req() req: RequestWithAdmin,
+  ) {
+    const before = await this.bookings.getById(id);
+    const result = await this.bookings.createAdHocCharge(id, {
+      kind: body.kind as AdHocChargeKind,
+      amount: body.amount,
+      description: body.description,
+    });
+    await this.audit.log({
+      action: 'booking.ad_hoc_charge',
+      adminUserId: req.adminUser?.id ?? null,
+      targetType: 'booking',
+      targetId: id,
+      before,
+      after: result.booking,
+      ipAddress: ipOf(req),
+      userAgent: uaOf(req),
+    });
+    return result;
+  }
+
+  @Post('charges/:chargeId/refund')
+  @Throttle(ADMIN_ACTION_THROTTLE)
+  async refundCharge(
+    @Param('chargeId', new ParseUUIDPipe()) chargeId: string,
+    @Body(new ZodValidationPipe(RefundBodySchema))
+    body: z.infer<typeof RefundBodySchema>,
+    @Req() req: RequestWithAdmin,
+  ) {
+    const result = await this.bookings.refundCharge(chargeId, {
+      amount: body.amount,
+      reason: body.reason,
+    });
+    await this.audit.log({
+      action: 'booking.refund_charge',
+      adminUserId: req.adminUser?.id ?? null,
+      targetType: 'booking_charge',
+      targetId: chargeId,
+      before: null,
       after: result.booking,
       ipAddress: ipOf(req),
       userAgent: uaOf(req),

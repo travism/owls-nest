@@ -203,7 +203,9 @@ To bypass in an emergency (don't make a habit of it): `git commit --no-verify` /
 
 ## Production deploy (preview)
 
-Production uses Docker Compose for `api` / `web` / `admin` / `build-worker` / `redis`, with Postgres on the host and Cloudflare Tunnel handling ingress. Compose file at `docker/docker-compose.yml`. Detailed deploy runbook lands with the production milestone.
+Production uses Docker Compose for `api` / `web` / `admin` / `build-worker` / `redis` / `mailhog`, with Postgres on the host and Cloudflare Tunnel handling ingress. Compose file at `docker/docker-compose.yml`. Detailed deploy runbook lands with the production milestone.
+
+**Local email — MailHog.** The Compose stack includes MailHog (D-021): all transactional email in dev hits SMTP on `:1025` and is browseable at **http://localhost:8025**. Production routes through MailerSend instead — set `EMAIL_PROVIDER=mailersend` and `MAILERSEND_API_KEY` in the prod env. Templates render the same payload either way; see `apps/api/src/integrations/email/templates/`.
 
 ---
 
@@ -230,13 +232,15 @@ Production uses Docker Compose for `api` / `web` / `admin` / `build-worker` / `r
 | M1 — Monorepo skeleton + Compose + Prisma schema | ✅ Complete |
 | M2 — Admin auth (login + TOTP + recovery + lockout) | ✅ Complete |
 | M3 — Property settings + manual pricing/availability + tax quote | ✅ Complete |
-| M4 — iCal export feed | ⬜ Next |
-| M5 — Public Astro site (Home/About/Gallery/Book/House Rules) | ⬜ |
-| M6 — Inquiry submission | ⬜ |
-| M7 — Request-to-book + Stripe Checkout | ⬜ |
-| M8 — Booking management actions | ⬜ |
+| M4 — iCal export feed | ✅ Complete |
+| M5 — Public Astro site (Home/About/Gallery/Book/House Rules) | ✅ Complete |
+| M6 — Inquiry submission | ✅ Complete |
+| M7 — Request-to-book + Stripe Checkout | ✅ Complete |
+| M8 — Booking management actions | ✅ Complete |
+| M9 — Phase 1 hardening (outbox drain, email, webhooks, rebuild worker) | ✅ Complete |
+| M10 — Phase 1 polish (throttling, a11y, content pages) | ⬜ Next |
 
-Total tests across the workspace: **146** (47 shared schema + 8 admin component + 57 API unit + 34 API e2e). Run `pnpm test:all` to verify.
+Total tests across the workspace: **417** (53 shared schema + 20 admin component + 35 web + 200 API unit + 109 API e2e). Run `pnpm test:all` to verify.
 
 See `docs/BUILD-PLAN.md` for milestone detail.
 
